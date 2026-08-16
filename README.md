@@ -11,6 +11,9 @@ It is fast because it fuses. It is trustworthy because every instruction it
 emits is checked against Apple's own assembler, and every number it computes
 is checked against exact rational arithmetic.
 
+**[Read the illustrated writeup →](https://greenaisolution.github.io/kiln/)**
+· or run `python3 tour.py` and watch the compiler work, one stage at a time.
+
 ```python
 from kiln import ir, jit
 from kiln.runtime import compile
