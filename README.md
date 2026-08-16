@@ -358,15 +358,52 @@ imported.
 ## Running it
 
 ```
+git clone https://github.com/GreenAiSolution/kiln && cd kiln
 python3 tour.py               # a guided walkthrough, 8 stops, ~40 seconds
 python3 tour.py 5             # just one stop
-python3 run_all.py            # everything, about 4 minutes
+python3 run_all.py            # everything, about 3-4 minutes
 python3 run_all.py --quick    # verification only, about 2 minutes
 ```
 
-Requires macOS on Apple Silicon (the JIT path is `mmap`/`mprotect`/
-`sys_icache_invalidate`), `clang` and `otool` from the Command Line Tools for
-the differential tests, and numpy for the benchmark comparisons.
+**Requirements.** macOS on Apple Silicon — the JIT path is
+`mmap` → `mprotect` → `sys_icache_invalidate`, and the instruction encoder is
+ARM64. `clang` and `otool` from the Xcode Command Line Tools, for the
+differential tests. Python 3.9+. `numpy` only for the benchmark comparisons and
+the training reference; `python3 run_all.py --quick` skips everything that
+needs it except `verify_training.py`.
+
+### Reproducing the numbers
+
+Every figure in this README comes out of `run_all.py`. What to expect:
+
+| suite | time | what it must print |
+|---|---|---|
+| `verify_isa` | 1 s | `MISMATCHES : 0` over 491 instructions |
+| `verify_listing` | 3 s | 0 mismatches over 159 kernels; 0 non-stdlib imports |
+| `verify_kernels` | 130 s | `0` in the ULP column for all 7 EXACT families |
+| `verify_exp` | 1 s | `max 1 ULP` on every sweep |
+| `verify_training` | 1 s | `max relative gap` below 5e-3 |
+| `roofline` | 12 s | FMA peak near 4.00/cycle; matmul >90% at 128³ |
+| `vs_numpy` | 35 s | median speedup above 2× |
+| `reduction_tradeoff` | 10 s | compensated error at 16 M within 2× of numpy's |
+| `autotune_study` | 40 s | guided/best median under 1.05× |
+
+**If a number differs from this README**, that is expected and fine — these
+are measurements of a specific machine. The correctness suites
+(`verify_*`) are the ones that must pass identically everywhere; they contain
+no timing at all. The benchmark suites will move with your chip, your clock,
+your thermal state and your numpy build.
+
+Two things that will make timings read low, both of which cost me real time:
+
+- **A cold core.** Apple Silicon ramps frequency on demand, so the first thing
+  timed in a process runs slow. `kiln.runtime.spin_up()` handles this; if you
+  write your own benchmark, call it first.
+- **Anything else running.** These are single-core measurements taken as a
+  best-of-many. Other load only ever makes them worse.
+
+`results/` holds the transcripts from the run these numbers were taken from,
+so you can diff yours against mine.
 
 ## How this relates to work that already exists
 
