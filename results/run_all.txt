@@ -63,7 +63,7 @@ constants         : 12 vector registers
   near overflow                100003 pts   max 1 ULP   bit-exact  91.2%   [0:91.2% 1:8.8%]
   near underflow               100003 pts   max 1 ULP   bit-exact  91.2%   [0:91.2% 1:8.8%]
 
-throughput        : 3.11 billion exp/s (0.32 ns each, one core)
+throughput        : 3.13 billion exp/s (0.32 ns each, one core)
 
 worst over all sweeps: 1 ULP  -> PASS (bound 2)
 KILN neural network - trained entirely on emitted machine code
@@ -91,30 +91,30 @@ max relative gap : 1.397e-04 over all 300 steps
 gap at final step: 1.091e-04
 steps that improved: 298/299
 
-training time    : 96 ms for 300 steps (0.32 ms/step)
-arithmetic       : 22.0 MFLOP per step, 68.9 GFLOP/s sustained
+training time    : 98 ms for 300 steps (0.33 ms/step)
+arithmetic       : 22.0 MFLOP per step, 67.7 GFLOP/s sustained
 curve written to /Users/greenai/greenai-kiln/results/training_curve.json
 
 PASS - the float32 network tracks the float64 reference and the loss came down.
 Machine ceilings, measured by KILN's own emitted code
 ==========================================================================
 vector FMA peak      :    103.3 GFLOP/s  (4.00 FMA/cycle at 3.228 GHz, best of 5 shapes)
-streaming load peak  :     61.6 GB/s      (single core, 67 MB per pass)
+streaming load peak  :     61.2 GB/s      (single core, 67 MB per pass)
 
 KILN matmul against the compute ceiling
   'plain' walks the whole of B for every row panel of A.
   'blocked' holds a cache-sized block of B resident instead.
              shape     plain   blocked  % of peak  flops/insn
-  64x64x64            95.7      94.4      92.7%        6.10
-  128x128x128          100.7     100.6      97.6%        6.10
-  256x256x256           97.8      97.7      94.7%        6.10
-  512x512x512           97.7      97.0      94.6%        6.10
-  1024x1024x1024          90.3      91.9      89.0%        6.10
-  2048x2048x2048          19.3      81.3      78.7%        6.10
+  64x64x64            95.7      94.5      92.7%        6.10
+  128x128x128          100.8     100.7      97.6%        6.10
+  256x256x256           98.4      98.3      95.3%        6.10
+  512x512x512           97.5      96.2      94.4%        6.10
+  1024x1024x1024          87.8      87.1      85.1%        6.10
+  2048x2048x2048          16.2      77.2      74.8%        6.10
 
 What the ceiling means
   This core retires 4.00 4-wide fused multiply-adds per cycle.
-  At 2048 cubed, cache blocking is worth 4.2x: 19.3 -> 81.3 GFLOP/s. Same
+  At 2048 cubed, cache blocking is worth 4.8x: 16.2 -> 77.2 GFLOP/s. Same
   instructions in the inner loop; only the order changed.
   KILN's matmul reaches 98% of that with no packing pass and no assembler.
 
@@ -129,54 +129,54 @@ KILN vs numpy   (Apple M1 Max, float32, single core)
 
 n = 4,096   L1 (16 KB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy             0.54      1.31       1.17     2.44x      2.19x    91.8  3.42e-08   6.85e-08
-  chain            0.70      2.23       2.16     3.19x      3.10x    94.1  9.13e-08   1.14e-07
-  wide             1.04      5.72       4.90     5.48x      4.69x    78.4  5.63e-08   5.47e-08
-  sigmoid          2.51      8.92       8.69     3.55x      3.46x    13.1  1.04e-07   8.87e-08
-  gelu             5.77      9.30       8.75     1.61x      1.52x     5.7  9.25e-08   9.77e-08
-  sumsq            0.73      3.11       3.01     4.29x      4.14x    45.2  1.61e-08   1.61e-08
-  softmax          5.08     10.37      10.38     2.04x      2.05x     9.7  1.65e-07   8.13e-08
-  layernorm        3.01      9.10       9.13     3.02x      3.03x    16.3  1.15e-07   1.60e-07
+  axpy             0.54      1.33       1.17     2.46x      2.17x    90.7  3.42e-08   6.85e-08
+  chain            0.70      2.18       2.13     3.13x      3.05x    93.9  9.13e-08   1.14e-07
+  wide             1.06      5.77       5.02     5.43x      4.72x    77.1  5.63e-08   5.47e-08
+  sigmoid          2.52      8.94       8.53     3.54x      3.38x    13.0  1.04e-07   8.87e-08
+  gelu             5.79      9.36       8.83     1.62x      1.53x     5.7  9.25e-08   9.77e-08
+  sumsq            0.73      3.10       3.07     4.23x      4.18x    44.7  1.61e-08   1.61e-08
+  softmax          5.04     10.36      10.18     2.06x      2.02x     9.7  1.65e-07   8.13e-08
+  layernorm        3.01      9.06       8.76     3.01x      2.91x    16.3  1.15e-07   1.60e-07
 
 n = 65,536   L2 (256 KB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy             8.95     13.92      12.00     1.56x      1.34x    87.9  3.42e-08   6.84e-08
-  chain           12.12     29.92      28.82     2.47x      2.38x    86.5  9.37e-08   1.16e-07
-  wide            15.51     63.58      63.63     4.10x      4.10x    84.5  6.69e-08   7.97e-08
-  sigmoid         36.15    124.08     125.12     3.43x      3.46x    14.5  1.12e-07   9.17e-08
-  gelu            89.77    118.17     114.13     1.32x      1.27x     5.8  1.10e-07   1.15e-07
-  sumsq            6.79     26.92      26.97     3.97x      3.97x    77.2  4.16e-07   2.71e-08
-  softmax         61.52    134.62     134.54     2.19x      2.19x    12.8  2.22e-07   9.53e-08
-  layernorm       29.69     47.83      51.31     1.61x      1.73x    26.5  1.42e-07   3.57e-08
+  axpy             8.98     12.21      12.03     1.36x      1.34x    87.6  3.42e-08   6.84e-08
+  chain           12.32     30.54      28.74     2.48x      2.33x    85.1  9.37e-08   1.16e-07
+  wide            15.55     64.75      64.04     4.16x      4.12x    84.3  6.69e-08   7.97e-08
+  sigmoid         36.84    123.92     122.63     3.36x      3.33x    14.2  1.12e-07   9.17e-08
+  gelu            88.15    115.46     114.21     1.31x      1.30x     5.9  1.10e-07   1.15e-07
+  sumsq            6.91     25.04      26.32     3.62x      3.81x    75.8  4.16e-07   2.71e-08
+  softmax         62.44    132.58     132.54     2.12x      2.12x    12.6  2.22e-07   9.53e-08
+  layernorm       29.15     47.83      50.58     1.64x      1.74x    27.0  1.42e-07   3.57e-08
 
 n = 1,048,576   L2/SLC (4 MB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy           161.75    427.62     211.25     2.64x      1.31x    77.8  3.41e-08   6.82e-08
-  chain          261.21    534.96     554.33     2.05x      2.12x    64.2  9.45e-08   1.17e-07
-  wide           335.92   1844.92    1261.17     5.49x      3.75x    62.4  7.17e-08   9.25e-08
-  sigmoid        584.04   2807.83    1990.54     4.81x      3.41x    14.4  1.18e-07   9.43e-08
-  gelu          1407.33   3059.58    1800.04     2.17x      1.28x     6.0  1.27e-07   1.23e-07
-  sumsq          200.96    815.04     423.71     4.06x      2.11x    41.7  3.01e-08   3.01e-08
-  softmax       1048.21   2278.92    2088.75     2.17x      1.99x    12.0  1.16e-07   8.65e-08
-  layernorm      670.75   1112.29     722.75     1.66x      1.08x    18.8  7.51e-08   1.07e-07
+  axpy           163.46    480.33     222.00     2.94x      1.36x    77.0  3.41e-08   6.82e-08
+  chain          254.67    590.25     535.96     2.32x      2.10x    65.9  9.45e-08   1.17e-07
+  wide           335.37   2749.96    1274.46     8.20x      3.80x    62.5  7.17e-08   9.25e-08
+  sigmoid        579.33   3013.46    1989.25     5.20x      3.43x    14.5  1.18e-07   9.43e-08
+  gelu          1431.29   3165.54    1832.25     2.21x      1.28x     5.9  1.27e-07   1.23e-07
+  sumsq          204.50    882.46     411.33     4.32x      2.01x    41.0  3.01e-08   3.01e-08
+  softmax       1062.25   2886.71    2132.04     2.72x      2.01x    11.8  1.16e-07   8.65e-08
+  layernorm      684.08   1182.04     741.67     1.73x      1.08x    18.4  7.51e-08   1.07e-07
 
 n = 16,777,216   DRAM (64 MB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy          3250.79   7676.29    4100.50     2.36x      1.26x    61.9  3.41e-08   6.81e-08
-  chain         4291.75  12700.17    9522.83     2.96x      2.22x    62.5  9.46e-08   1.18e-07
-  wide          5361.67  38732.83   20824.38     7.22x      3.88x    62.6  7.94e-08   9.98e-08
-  sigmoid       9282.21  47686.29   32416.33     5.14x      3.49x    14.5  1.18e-07   9.48e-08
-  gelu         22503.42  51052.17   30539.67     2.27x      1.36x     6.0  1.32e-07   1.32e-07
-  sumsq         3241.42  14734.08    7020.42     4.55x      2.17x    41.4  6.40e-08   2.54e-08
-  softmax      17001.54  46003.79   35006.50     2.71x      2.06x    11.8  1.45e-07   1.44e-07
-  layernorm    10881.62  19147.00   13194.25     1.76x      1.21x    18.5  8.31e-08   6.05e-08
+  axpy          3280.08   9036.04    4050.29     2.75x      1.23x    61.4  3.41e-08   6.81e-08
+  chain         4323.38  14000.67    9900.33     3.24x      2.29x    62.1  9.46e-08   1.18e-07
+  wide          5412.33  42803.12   21049.29     7.91x      3.89x    62.0  7.94e-08   9.98e-08
+  sigmoid       9505.83  51508.79   32897.08     5.42x      3.46x    14.1  1.18e-07   9.48e-08
+  gelu         23511.29  57218.17   32571.83     2.43x      1.39x     5.7  1.32e-07   1.32e-07
+  sumsq         3295.88  16855.58    7194.38     5.11x      2.18x    40.7  6.40e-08   2.54e-08
+  softmax      17665.67  48891.83   35725.96     2.77x      2.02x    11.4  1.45e-07   1.44e-07
+  layernorm    11190.04  23127.79   13363.21     2.07x      1.19x    18.0  8.31e-08   6.05e-08
 
 ============================================================================================
-speedup vs idiomatic numpy : median 2.71x   best 7.22x   worst 1.32x
-speedup vs numpy with out= : median 2.19x   best 4.69x   worst 1.08x
+speedup vs idiomatic numpy : median 2.94x   best 8.20x   worst 1.31x
+speedup vs numpy with out= : median 2.17x   best 4.72x   worst 1.08x
 worst error vs float64     : kiln 4.164e-07   numpy 1.604e-07
 cases where kiln is at least as accurate as numpy: 18/32
-compile time               : 0.44 ms average
+compile time               : 0.47 ms average
 wrote results/vs_numpy.json
 Reduction: what compensation buys and what it costs
 ============================================================================================
@@ -184,12 +184,12 @@ KAHAN_THRESHOLD = 4096 terms per accumulator lane
 
            n  terms/lane |   plain err   plain us |   kahan err   kahan us |   numpy err  numpy us |   auto
 --------------------------------------------------------------------------------------------
-       16384         683 |    5.11e-08        2.1 |    3.64e-08        3.8 |    3.64e-08       8.0 |  plain
-       65536        2731 |    1.71e-07        6.8 |    9.60e-08       13.2 |    6.99e-09      26.5 |  plain
-      262144       10923 |    1.65e-07       25.4 |    1.38e-08       50.7 |    1.38e-08      88.6 |  kahan
-     1048576       43691 |    4.33e-06      116.7 |    4.43e-08      205.0 |    4.50e-08     562.1 |  kahan
-     4194304      174763 |    3.38e-05      533.5 |    2.33e-08      804.8 |    2.33e-08    1690.5 |  kahan
-    16777216      699051 |    2.77e-04     2137.9 |    6.03e-08     3288.4 |    6.03e-08    9805.4 |  kahan
+       16384         683 |    5.11e-08        2.1 |    3.64e-08        3.8 |    3.64e-08       7.7 |  plain
+       65536        2731 |    1.71e-07        6.8 |    9.60e-08       13.4 |    6.99e-09      24.7 |  plain
+      262144       10923 |    1.65e-07       25.4 |    1.38e-08       51.6 |    1.38e-08      90.3 |  kahan
+     1048576       43691 |    4.33e-06      120.2 |    4.43e-08      204.3 |    4.50e-08     575.9 |  kahan
+     4194304      174763 |    3.38e-05      535.6 |    2.33e-08      820.9 |    2.33e-08    1679.9 |  kahan
+    16777216      699051 |    2.77e-04     2153.4 |    6.03e-08     3303.3 |    6.03e-08   11169.9 |  kahan
 
 Reading this: at small sizes plain summation is already accurate and
 compensation is pure cost. At large sizes plain drifts by orders of
@@ -197,129 +197,129 @@ magnitude and compensation is the only thing keeping the answer
 meaningful. The threshold is where those two curves cross.
 Collecting measurements (every kernel x size x schedule)
 ====================================================================================
-  axpy        n=4096      best     0.53us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst     0.85us  spread 1.59x
-  axpy        n=65536     best     6.57us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst    15.69us  spread 2.39x
-  axpy        n=524288    best    50.18us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst   120.96us  spread 2.41x
-  axpy        n=4194304   best   595.50us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst  1220.08us  spread 2.05x
+  axpy        n=4096      best     0.52us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst     0.85us  spread 1.62x
+  axpy        n=65536     best     6.72us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    16.01us  spread 2.38x
+  axpy        n=524288    best    51.65us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst   123.08us  spread 2.38x
+  axpy        n=4194304   best   602.92us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  1716.50us  spread 2.85x
   chain       n=4096      best     0.67us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst     1.08us  spread 1.62x
-  chain       n=65536     best    11.03us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    22.87us  spread 2.07x
-  chain       n=524288    best    76.73us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst   166.75us  spread 2.17x
-  chain       n=4194304   best   814.54us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  2180.71us  spread 2.68x
-  wide        n=4096      best     0.95us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst     1.34us  spread 1.41x
-  wide        n=65536     best    13.85us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst    29.48us  spread 2.13x
-  wide        n=524288    best   108.25us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst   210.25us  spread 1.94x
-  wide        n=4194304   best  1072.21us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  2930.42us  spread 2.73x
-  poly        n=4096      best     0.77us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst     0.95us  spread 1.23x
-  poly        n=65536     best     8.17us with Schedule(unroll=4, prefetch=1024, compensate=auto)  worst    10.80us  spread 1.32x
-  poly        n=524288    best    62.46us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    83.87us  spread 1.34x
-  poly        n=4194304   best   536.75us with Schedule(unroll=6, prefetch=256, compensate=auto)  worst   889.62us  spread 1.66x
-  sigmoid     n=4096      best     2.47us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst     2.84us  spread 1.15x
-  sigmoid     n=65536     best    35.72us with Schedule(unroll=10, prefetch=256, compensate=auto)  worst    41.26us  spread 1.16x
-  sigmoid     n=524288    best   282.83us with Schedule(unroll=10, prefetch=512, compensate=auto)  worst   328.46us  spread 1.16x
-  sigmoid     n=4194304   best  2265.04us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst  2640.87us  spread 1.17x
-  gelu        n=4096      best     5.75us with Schedule(unroll=8, prefetch=512, compensate=auto)  worst     5.94us  spread 1.03x
-  gelu        n=65536     best    88.02us with Schedule(unroll=6, prefetch=0, compensate=auto)  worst    91.00us  spread 1.03x
-  gelu        n=524288    best   702.08us with Schedule(unroll=6, prefetch=1024, compensate=auto)  worst   731.88us  spread 1.04x
-  gelu        n=4194304   best  5612.75us with Schedule(unroll=1, prefetch=256, compensate=auto)  worst  5812.83us  spread 1.04x
-  hypot       n=4096      best     0.89us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst     0.95us  spread 1.06x
-  hypot       n=65536     best    10.55us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst    16.25us  spread 1.54x
-  hypot       n=524288    best    81.69us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst   125.42us  spread 1.54x
-  hypot       n=4194304   best   793.92us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst  1364.71us  spread 1.72x
-  sum         n=4096      best     0.59us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst     1.43us  spread 2.41x
-  sum         n=65536     best     3.73us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst    63.50us  spread 17.03x
-  sum         n=524288    best    65.21us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst   503.04us  spread 7.71x
-  sum         n=4194304   best   521.71us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst  3950.63us  spread 7.57x
-  sumsq       n=4096      best     0.74us with Schedule(unroll=6, prefetch=0, compensate=auto)  worst     1.47us  spread 1.99x
-  sumsq       n=65536     best     6.84us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst    63.52us  spread 9.28x
-  sumsq       n=524288    best   100.71us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst   503.04us  spread 5.00x
-  sumsq       n=4194304   best   805.08us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst  4095.67us  spread 5.09x
-  dot         n=4096      best     0.71us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst     1.48us  spread 2.06x
-  dot         n=65536     best     6.70us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst    65.52us  spread 9.77x
-  dot         n=524288    best   100.29us with Schedule(unroll=10, prefetch=256, compensate=auto)  worst   503.08us  spread 5.02x
-  dot         n=4194304   best   801.17us with Schedule(unroll=5, prefetch=1024, compensate=auto)  worst  4028.50us  spread 5.03x
-  multi       n=4096      best     0.87us with Schedule(unroll=4, prefetch=128, compensate=auto)  worst     1.18us  spread 1.36x
-  multi       n=65536     best    16.55us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    33.98us  spread 2.05x
-  multi       n=524288    best   135.21us with Schedule(unroll=8, prefetch=1024, compensate=auto)  worst   275.17us  spread 2.04x
-  multi       n=4194304   best  1333.21us with Schedule(unroll=8, prefetch=1024, compensate=auto)  worst  2141.75us  spread 1.61x
-  scale_relu  n=4096      best     0.69us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst     0.97us  spread 1.42x
-  scale_relu  n=65536     best     8.63us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst    15.52us  spread 1.80x
-  scale_relu  n=524288    best    57.03us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst   123.13us  spread 2.16x
-  scale_relu  n=4194304   best   606.88us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst  1313.00us  spread 2.16x
+  chain       n=65536     best     9.79us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst    22.71us  spread 2.32x
+  chain       n=524288    best    77.75us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst   167.21us  spread 2.15x
+  chain       n=4194304   best   864.00us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst  2555.21us  spread 2.96x
+  wide        n=4096      best     0.94us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst     1.35us  spread 1.43x
+  wide        n=65536     best    13.19us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst    29.12us  spread 2.21x
+  wide        n=524288    best   104.54us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst   211.79us  spread 2.03x
+  wide        n=4194304   best  1118.83us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  3111.79us  spread 2.78x
+  poly        n=4096      best     0.77us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst     0.94us  spread 1.22x
+  poly        n=65536     best     8.27us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    10.80us  spread 1.31x
+  poly        n=524288    best    63.46us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst    83.62us  spread 1.32x
+  poly        n=4194304   best   537.25us with Schedule(unroll=6, prefetch=512, compensate=auto)  worst  1014.25us  spread 1.89x
+  sigmoid     n=4096      best     2.48us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst     2.91us  spread 1.17x
+  sigmoid     n=65536     best    35.71us with Schedule(unroll=10, prefetch=256, compensate=auto)  worst    40.97us  spread 1.15x
+  sigmoid     n=524288    best   283.00us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst   324.83us  spread 1.15x
+  sigmoid     n=4194304   best  2291.79us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst  2943.29us  spread 1.28x
+  gelu        n=4096      best     5.76us with Schedule(unroll=5, prefetch=512, compensate=auto)  worst     5.95us  spread 1.03x
+  gelu        n=65536     best    88.08us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst    91.00us  spread 1.03x
+  gelu        n=524288    best   702.54us with Schedule(unroll=3, prefetch=256, compensate=auto)  worst   726.71us  spread 1.03x
+  gelu        n=4194304   best  5662.12us with Schedule(unroll=8, prefetch=256, compensate=auto)  worst  6086.71us  spread 1.07x
+  hypot       n=4096      best     0.90us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst     0.96us  spread 1.06x
+  hypot       n=65536     best    10.56us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst    15.74us  spread 1.49x
+  hypot       n=524288    best    81.79us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst   122.79us  spread 1.50x
+  hypot       n=4194304   best   706.67us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst  1720.79us  spread 2.44x
+  sum         n=4096      best     0.62us with Schedule(unroll=8, prefetch=512, compensate=auto)  worst     1.47us  spread 2.37x
+  sum         n=65536     best     3.81us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst    61.69us  spread 16.21x
+  sum         n=524288    best    65.25us with Schedule(unroll=8, prefetch=512, compensate=auto)  worst   488.12us  spread 7.48x
+  sum         n=4194304   best   521.96us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst  4053.12us  spread 7.77x
+  sumsq       n=4096      best     0.73us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst     1.46us  spread 1.99x
+  sumsq       n=65536     best     6.72us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst    61.63us  spread 9.17x
+  sumsq       n=524288    best   100.83us with Schedule(unroll=8, prefetch=512, compensate=auto)  worst   497.75us  spread 4.94x
+  sumsq       n=4194304   best   820.33us with Schedule(unroll=6, prefetch=256, compensate=auto)  worst  4070.58us  spread 4.96x
+  dot         n=4096      best     0.74us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst     1.47us  spread 1.99x
+  dot         n=65536     best     6.84us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst    62.79us  spread 9.18x
+  dot         n=524288    best   100.29us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst   492.25us  spread 4.91x
+  dot         n=4194304   best   802.25us with Schedule(unroll=6, prefetch=512, compensate=auto)  worst  4093.21us  spread 5.10x
+  multi       n=4096      best     0.89us with Schedule(unroll=4, prefetch=512, compensate=auto)  worst     1.21us  spread 1.36x
+  multi       n=65536     best    16.72us with Schedule(unroll=6, prefetch=256, compensate=auto)  worst    33.90us  spread 2.03x
+  multi       n=524288    best   135.13us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst   272.13us  spread 2.01x
+  multi       n=4194304   best  1339.96us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst  2140.50us  spread 1.60x
+  scale_relu  n=4096      best     0.70us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst     0.98us  spread 1.41x
+  scale_relu  n=65536     best     8.60us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    15.84us  spread 1.84x
+  scale_relu  n=524288    best    54.94us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst   121.75us  spread 2.22x
+  scale_relu  n=4194304   best   603.46us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst  1692.50us  spread 2.80x
 
-1920 measurements in 27.5s
-schedule spread (worst/best): median 1.99x   max 17.03x   min 1.03x
+1920 measurements in 27.9s
+schedule spread (worst/best): median 2.01x   max 16.21x   min 1.03x
    ^ this is the entire prize. A tuner cannot beat the best schedule, only find it.
-in-sample R^2 : 0.6944
+in-sample R^2 : 0.6943
 
 Leave-one-kernel-out: the model never sees the kernel it schedules
 ====================================================================================
   held out      default us  guided us   best us  guided/best  vs default     R^2
-  axpy                0.59       0.53      0.53       0.995x       1.11x  -1.145
-  axpy                8.68       8.95      6.57       1.363x       0.97x  -1.145
-  axpy               67.19      70.88     50.18       1.412x       0.95x  -1.145
-  axpy              618.13     792.50    595.50       1.331x       0.78x  -1.145
-  chain               0.67       0.66      0.67       0.996x       1.01x   0.598
-  chain              11.31      12.26     11.03       1.111x       0.92x   0.598
-  chain              87.31      99.96     76.73       1.303x       0.87x   0.598
-  chain             825.96    1052.79    814.54       1.292x       0.78x   0.598
-  wide                1.00       0.94      0.95       0.997x       1.07x   0.376
-  wide               13.88      14.11     13.85       1.019x       0.98x   0.376
-  wide              112.71     115.42    108.25       1.066x       0.98x   0.376
-  wide             1100.29    1085.46   1072.21       1.012x       1.01x   0.376
-  poly                0.77       0.76      0.77       0.984x       1.02x  -1.969
-  poly                8.28       8.17      8.17       1.001x       1.01x  -1.969
-  poly               63.73      63.67     62.46       1.019x       1.00x  -1.969
-  poly              543.21     535.08    536.75       0.997x       1.02x  -1.969
-  sigmoid             2.61       2.81      2.47       1.138x       0.93x -1053.583
-  sigmoid            36.89      40.20     35.72       1.125x       0.92x -1053.583
-  sigmoid           299.04     318.29    282.83       1.125x       0.94x -1053.583
-  sigmoid          2365.54    2595.54   2265.04       1.146x       0.91x -1053.583
-  gelu                5.77       5.76      5.75       1.001x       1.00x -303.497
-  gelu               88.08      88.10     88.02       1.001x       1.00x -303.497
-  gelu              702.33     702.58    702.08       1.001x       1.00x -303.497
-  gelu             5628.00    5638.04   5612.75       1.005x       1.00x -303.497
-  hypot               0.93       0.91      0.89       1.018x       1.02x  -6.688
-  hypot              10.61      10.58     10.55       1.004x       1.00x  -6.688
-  hypot              83.94      82.35     81.69       1.008x       1.02x  -6.688
-  hypot             747.50     791.75    793.92       0.997x       0.94x  -6.688
-  sum                 0.73       0.61      0.59       1.022x       1.21x   0.623
-  sum                 4.49       3.73      3.73       1.001x       1.20x   0.623
-  sum               122.63      65.21     65.21       1.000x       1.88x   0.623
-  sum               989.29     521.54    521.71       1.000x       1.90x   0.623
-  sumsq               0.76       0.74      0.74       1.001x       1.03x   0.756
-  sumsq               7.04       6.72      6.84       0.982x       1.05x   0.756
-  sumsq             124.00     100.92    100.71       1.002x       1.23x   0.756
-  sumsq             990.83     806.08    805.08       1.001x       1.23x   0.756
-  dot                 0.74       0.72      0.71       1.007x       1.02x   0.755
-  dot                 7.02       6.81      6.70       1.016x       1.03x   0.755
-  dot               124.04     102.21    100.29       1.019x       1.21x   0.755
-  dot               990.42     801.21    801.17       1.000x       1.24x   0.755
-  multi               0.91       0.84      0.87       0.965x       1.09x -150.138
-  multi              17.08      17.35     16.55       1.048x       0.98x -150.138
-  multi             136.71     140.08    135.21       1.036x       0.98x -150.138
-  multi            1255.92    1334.83   1333.21       1.001x       0.94x -150.138
-  scale_relu          0.72       0.69      0.69       1.003x       1.05x   0.475
-  scale_relu          8.61       8.60      8.63       0.997x       1.00x   0.475
-  scale_relu         66.46      74.60     57.03       1.308x       0.89x   0.475
-  scale_relu        619.92     793.08    606.88       1.307x       0.78x   0.475
+  axpy                0.54       0.53      0.52       1.015x       1.01x  -0.423
+  axpy                8.60       9.11      6.72       1.355x       0.94x  -0.423
+  axpy               66.19      71.15     51.65       1.378x       0.93x  -0.423
+  axpy              604.00     797.17    602.92       1.322x       0.76x  -0.423
+  chain               0.70       0.68      0.67       1.013x       1.02x   0.609
+  chain              11.32      12.25      9.79       1.251x       0.92x   0.609
+  chain              87.56      97.08     77.75       1.249x       0.90x   0.609
+  chain             866.87    1062.37    864.00       1.230x       0.82x   0.609
+  wide                1.01       0.94      0.94       1.000x       1.07x   0.435
+  wide               13.85      14.10     13.19       1.069x       0.98x   0.435
+  wide              110.75     113.58    104.54       1.086x       0.98x   0.435
+  wide             1127.33    1108.25   1118.83       0.991x       1.02x   0.435
+  poly                0.78       0.77      0.77       1.004x       1.00x  -0.893
+  poly                8.26       8.27      8.27       1.000x       1.00x  -0.893
+  poly               64.29      63.58     63.46       1.002x       1.01x  -0.893
+  poly              543.79     537.83    537.25       1.001x       1.01x  -0.893
+  sigmoid             2.64       2.82      2.48       1.134x       0.94x -739.761
+  sigmoid            37.63      40.82     35.71       1.143x       0.92x -739.761
+  sigmoid           299.00     324.54    283.00       1.147x       0.92x -739.761
+  sigmoid          2427.83    2608.33   2291.79       1.138x       0.93x -739.761
+  gelu                5.89       5.88      5.76       1.021x       1.00x -194.129
+  gelu               89.77      89.79     88.08       1.019x       1.00x -194.129
+  gelu              716.17     716.33    702.54       1.020x       1.00x -194.129
+  gelu             5739.00    5737.63   5662.12       1.013x       1.00x -194.129
+  hypot               0.94       0.91      0.90       1.011x       1.03x  -2.853
+  hypot              10.81      10.81     10.56       1.023x       1.00x  -2.853
+  hypot              84.00      83.98     81.79       1.027x       1.00x  -2.853
+  hypot             717.21     798.83    706.67       1.130x       0.90x  -2.853
+  sum                 0.72       0.61      0.62       0.989x       1.18x   0.640
+  sum                 4.57       3.82      3.81       1.004x       1.20x   0.640
+  sum               125.96      66.44     65.25       1.018x       1.90x   0.640
+  sum              1012.96     531.25    521.96       1.018x       1.91x   0.640
+  sumsq               0.73       0.75      0.73       1.019x       0.98x   0.761
+  sumsq               6.95       6.88      6.72       1.024x       1.01x   0.761
+  sumsq             126.37     102.67    100.83       1.018x       1.23x   0.761
+  sumsq            1010.50     813.04    820.33       0.991x       1.24x   0.761
+  dot                 0.74       0.73      0.74       0.983x       1.02x   0.763
+  dot                 7.02       6.79      6.84       0.993x       1.03x   0.763
+  dot               126.38     102.21    100.29       1.019x       1.24x   0.763
+  dot              1009.92     817.21    802.25       1.019x       1.24x   0.763
+  multi               0.93       0.86      0.89       0.964x       1.07x -145.557
+  multi              17.10      17.11     16.72       1.023x       1.00x -145.557
+  multi             133.04     143.38    135.13       1.061x       0.93x -145.557
+  multi            1346.50    1345.04   1339.96       1.004x       1.00x -145.557
+  scale_relu          0.72       0.70      0.70       0.999x       1.03x   0.532
+  scale_relu          8.73       8.65      8.60       1.006x       1.01x   0.532
+  scale_relu         55.71      72.96     54.94       1.328x       0.76x   0.532
+  scale_relu        626.92     797.96    603.46       1.322x       0.79x   0.532
 
 ====================================================================================
 cases                        : 48
-guided / exhaustive-best     : median 1.007x   mean 1.066x   worst 1.412x
-within 2% of the true optimum: 32/48 (67%)
-speedup over the default     : median 1.00x   best 1.90x
+guided / exhaustive-best     : median 1.019x   mean 1.075x   worst 1.378x
+within 2% of the true optimum: 27/48 (56%)
+speedup over the default     : median 1.00x   best 1.91x
 candidates ranked per kernel : 40, of which 5 were actually timed
-ranking cost                 : 6 ms (compiles all candidates, times none)
+ranking cost                 : 7 ms (compiles all candidates, times none)
 
 What the model learned (largest weights on log ns/element):
-  leftover_frac      +5.0670
-  bias               -3.2727
-  spare_regs         +2.7331
-  inv_unroll         +1.6868
-  ld_per_elem        +1.4829
-  alu_per_elem       +1.3440
-  st_per_elem        +1.2403
-  insns_per_elem     -1.1638
+  bias               -3.6519
+  spare_regs         +2.6346
+  leftover_frac      +2.6226
+  inv_unroll         +2.2975
+  ld_per_elem        +1.6180
+  alu_per_elem       +1.4143
+  st_per_elem        +1.3440
+  insns_per_elem     -1.2366
 
 model saved to /Users/greenai/.kiln/cost_model.json (1920 samples)
 wrote results/autotune.json
@@ -334,13 +334,13 @@ wrote results/autotune.json
 # Whole kernels + dependency audit
 # tests/verify_listing.py 
 ##############################################################################
-[Whole kernels + dependency audit: ok in 7.4s]
+[Whole kernels + dependency audit: ok in 7.9s]
 
 ##############################################################################
 # Numerics of every generated kernel
 # tests/verify_kernels.py 
 ##############################################################################
-[Numerics of every generated kernel: ok in 109.9s]
+[Numerics of every generated kernel: ok in 112.9s]
 
 ##############################################################################
 # Vectorised exp, on hardware
@@ -358,25 +358,25 @@ wrote results/autotune.json
 # Machine ceilings and matmul roofline
 # bench/roofline.py 
 ##############################################################################
-[Machine ceilings and matmul roofline: ok in 12.8s]
+[Machine ceilings and matmul roofline: ok in 13.8s]
 
 ##############################################################################
 # Fused kernels vs numpy
 # bench/vs_numpy.py --seconds 0.08 --json results/vs_numpy.json
 ##############################################################################
-[Fused kernels vs numpy: ok in 22.5s]
+[Fused kernels vs numpy: ok in 23.4s]
 
 ##############################################################################
 # Reduction accuracy vs speed
 # bench/reduction_tradeoff.py 
 ##############################################################################
-[Reduction accuracy vs speed: ok in 7.3s]
+[Reduction accuracy vs speed: ok in 7.4s]
 
 ##############################################################################
 # Cost model, leave-one-kernel-out
 # bench/autotune_study.py --seconds 0.012 --shortlist 5 --json results/autotune.json
 ##############################################################################
-[Cost model, leave-one-kernel-out: ok in 32.7s]
+[Cost model, leave-one-kernel-out: ok in 33.1s]
 
 ==============================================================================
 SUMMARY
@@ -391,4 +391,4 @@ SUMMARY
   PASS  Reduction accuracy vs speed
   PASS  Cost model, leave-one-kernel-out
 
-9/9 passed in 194s
+9/9 passed in 200s

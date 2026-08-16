@@ -285,7 +285,7 @@ footer .mono{font-size:12px;letter-spacing:.06em}
         <div class="stats" style="margin-top:26px">
           <div class="stat"><div class="n">2.9<s>&times;</s></div>
             <div class="k">Faster than numpy</div>
-            <div class="d">Median across 32 tests. Best case 7.1&times;.</div></div>
+            <div class="d">Median across 32 tests. Best case 7.9&times;.</div></div>
           <div class="stat"><div class="n">97.6<s>%</s></div>
             <div class="k">Of the chip's ceiling</div>
             <div class="d">Matrix multiply, against a limit KILN measured itself.</div></div>
@@ -317,7 +317,7 @@ footer .mono{font-size:12px;letter-spacing:.06em}
         <p>KILN sees <em>one expression</em>. It compiles the whole thing into a single loop
         that touches each number once, keeps every intermediate value in a register, and
         allocates nothing at all. On 16 million numbers that is the difference between
-        <strong>12.5 milliseconds and 4.3</strong>.</p>
+        <strong>14.0 milliseconds and 4.3</strong>.</p>
         <p><small>The pattern below is the thesis: the more operators in the expression, the
         bigger the gap &mdash; because that is exactly how many trips through memory the
         fusion removes. <code>a*2.5 + b</code> has two operators and gains least. The
@@ -353,7 +353,7 @@ footer .mono{font-size:12px;letter-spacing:.06em}
           </div>
           <div class="ceilcard">
             <h3>Memory ceiling</h3>
-            <div class="pct">61.6<span style="font-size:15px;color:var(--muted)"> GB/s</span></div>
+            <div class="pct">61.2<span style="font-size:15px;color:var(--muted)"> GB/s</span></div>
             <small>The most this core can pull from main memory, one core, streaming.</small>
           </div>
           <div class="ceilcard">
@@ -365,10 +365,10 @@ footer .mono{font-size:12px;letter-spacing:.06em}
         </div>
 
         <p style="margin-top:30px">The large sizes do not manage that on their own. At
-        2048&times;2048 the multiply runs at <strong>18.8 GFLOP/s</strong> &mdash; 18% of the
+        2048&times;2048 the multiply runs at <strong>16.2 GFLOP/s</strong> &mdash; 16% of the
         ceiling &mdash; because it re-reads the same slab of memory for every row of the answer.
-        Working on cache-sized blocks instead takes it to <strong class="em">81.7</strong>.
-        That 4.3&times; is the single largest improvement in the project, and the instructions
+        Working on cache-sized blocks instead takes it to <strong class="em">77.2</strong>.
+        That 4.8&times; is the single largest improvement in the project, and the instructions
         in the inner loop are identical before and after. Only the order changed.</p>
 
         <p><small>Getting the ceiling itself right took two attempts, and the first one was
@@ -449,18 +449,18 @@ footer .mono{font-size:12px;letter-spacing:.06em}
             <thead><tr><th>Numbers added</th><th>Plain error</th><th>Plain</th>
               <th>Corrected error</th><th>Corrected</th><th>numpy error</th><th>numpy</th></tr></thead>
             <tbody>
-              <tr><td>65,536</td><td>1.7e-07</td><td>8.9 &micro;s</td><td>9.6e-08</td>
-                <td>19.2 &micro;s</td><td>7.0e-09</td><td>35.7 &micro;s</td></tr>
-              <tr><td>1,048,576</td><td>4.3e-06</td><td>175 &micro;s</td><td class="win">4.4e-08</td>
-                <td class="win">297 &micro;s</td><td>4.5e-08</td><td>736 &micro;s</td></tr>
-              <tr><td>16,777,216</td><td>2.8e-04</td><td>2,177 &micro;s</td><td class="win">6.0e-08</td>
-                <td class="win">4,697 &micro;s</td><td>6.0e-08</td><td>14,679 &micro;s</td></tr>
+              <tr><td>65,536</td><td>1.7e-07</td><td>6.8 &micro;s</td><td>9.6e-08</td>
+                <td>13.4 &micro;s</td><td>7.0e-09</td><td>24.7 &micro;s</td></tr>
+              <tr><td>1,048,576</td><td>4.3e-06</td><td>120 &micro;s</td><td class="win">4.4e-08</td>
+                <td class="win">204 &micro;s</td><td>4.5e-08</td><td>576 &micro;s</td></tr>
+              <tr><td>16,777,216</td><td>2.8e-04</td><td>2,153 &micro;s</td><td class="win">6.0e-08</td>
+                <td class="win">3,303 &micro;s</td><td>6.0e-08</td><td>11,170 &micro;s</td></tr>
             </tbody>
           </table>
         </div>
         <p style="margin-top:18px"><small>At 16 million numbers the corrected version matches
         numpy's accuracy to three significant figures while running
-        <strong class="em">3.1&times; faster</strong>. Left uncorrected it would have been four
+        <strong class="em">3.4&times; faster</strong>. Left uncorrected it would have been four
         thousand times less accurate &mdash; which is exactly why the switch exists.</small></p>
       </div>
     </div>
@@ -493,8 +493,8 @@ footer .mono{font-size:12px;letter-spacing:.06em}
             <div class="d">Relative difference between the two curves, over all 300 steps.</div></div>
           <div class="stat"><div class="n">298<s>/299</s></div><div class="k">Steps that improved</div>
             <div class="d">The loss went down almost every single step.</div></div>
-          <div class="stat"><div class="n">0.38<s>&nbsp;ms</s></div><div class="k">Per training step</div>
-            <div class="d">57.3 GFLOP/s sustained, on one core.</div></div>
+          <div class="stat"><div class="n">0.33<s>&nbsp;ms</s></div><div class="k">Per training step</div>
+            <div class="d">67.7 GFLOP/s sustained, on one core.</div></div>
         </div>
       </div>
     </div>
@@ -507,17 +507,17 @@ footer .mono{font-size:12px;letter-spacing:.06em}
         <h2>It learns the machine it runs on</h2>
         <p>There are forty ways to arrange each loop, and the best one shifts with the size of
         the data and the shape of the expression. The gap between the best and worst
-        arrangement reaches <strong>2.77&times;</strong>, so choosing badly is expensive.
+        arrangement reaches <strong>16&times;</strong> on the worst kernel, so choosing badly is expensive.
         Timing all forty is accurate and slow.</p>
         <p>So KILN fits a small model on measurements from this machine &mdash; instructions per
         number, memory traffic, register pressure, loop length &mdash; and uses it to rank all
         forty candidates without running any of them. Only the top five get timed.</p>
         <div class="stats" style="margin-top:24px">
-          <div class="stat"><div class="n">1.009<s>&times;</s></div><div class="k">Of the true best</div>
+          <div class="stat"><div class="n">1.019<s>&times;</s></div><div class="k">Of the true best</div>
             <div class="d">Median, on kernels the model had never seen.</div></div>
-          <div class="stat"><div class="n">10<s>&nbsp;ms</s></div><div class="k">To rank all 40</div>
+          <div class="stat"><div class="n">7<s>&nbsp;ms</s></div><div class="k">To rank all 40</div>
             <div class="d">Compiles every option, times none of them.</div></div>
-          <div class="stat"><div class="n">1.62<s>&times;</s></div><div class="k">Worst case</div>
+          <div class="stat"><div class="n">1.38<s>&times;</s></div><div class="k">Worst case</div>
             <div class="d">Where it misses. It shortlists; it does not decide.</div></div>
         </div>
         <p style="margin-top:22px"><small>Scored by holding out an entire kernel: the model is
@@ -618,16 +618,16 @@ document.getElementById("bits").innerHTML = FIELDS.map((f,i)=>
 
 /* ---- speedup bars ------------------------------------------------------ */
 const SPEED = [
-  ["wide expr",   7.11, 3.89],
-  ["sigmoid",     5.10, 3.45],
-  ["sum sq. diff",4.51, 2.12],
-  ["chain",       2.92, 2.18],
-  ["softmax",     2.72, 2.02],
-  ["gelu",        2.37, 1.38],
-  ["a*2.5 + b",   2.35, 1.24],
-  ["layernorm",   1.79, 1.19]
+  ["wide expr",   7.91, 3.89],
+  ["sigmoid",     5.42, 3.46],
+  ["sum sq. diff",5.11, 2.18],
+  ["chain",       3.24, 2.29],
+  ["softmax",     2.77, 2.02],
+  ["a*2.5 + b",   2.75, 1.23],
+  ["gelu",        2.43, 1.39],
+  ["layernorm",   2.07, 1.19]
 ];
-const MAXS = 8;
+const MAXS = 9;
 document.getElementById("speed").innerHTML = SPEED.map(([k,a,b])=>`
   <div class="row"><div class="lab">${k}</div>
     <div class="track">

@@ -5,7 +5,7 @@
 You describe a computation. KILN analyses it, decides how to schedule it,
 emits ARM64 NEON instructions one 32-bit word at a time, writes them into
 executable memory, and calls them. No LLVM, no assembler, no C compiler, no
-numpy, no libraries of any kind — 3,176 lines of the Python standard library.
+numpy, no libraries of any kind — 3,275 lines of the Python standard library.
 
 It is fast because it fuses. It is trustworthy because every instruction it
 emits is checked against Apple's own assembler, and every number it computes
@@ -36,8 +36,9 @@ and 4.3 ms.
 
 ## The headline numbers
 
-All measured on an Apple M1 Max, single core, float32. Reproduce with
-`python3 run_all.py`.
+All measured on an Apple M1 Max, single core, float32, and all taken from one
+run whose full transcript ships in [`results/run_all.txt`](results/run_all.txt).
+Reproduce with `python3 run_all.py`.
 
 The speedup rows move a little between runs — the median lands at 2.7–2.9×.
 The variance is on numpy's side: its temporaries are 64 MB each at the largest
@@ -56,15 +57,15 @@ the absolute numbers were wrong and are now right.
 | | |
 |---|---|
 | Instructions verified bit-identical to Apple's assembler | **491 / 491** |
-| Whole kernels re-assembled and compared | **159**, 16,518 instructions, 0 mismatches |
+| Whole kernels re-assembled and compared | **159**, 15,732 instructions, 0 mismatches |
 | Kernels numerically verified | **1,386**, 9,075,402 elements |
 | Kernels required to be bit-exact that were bit-exact | **7 of 7 families, 0 ULP** |
-| Speedup vs idiomatic numpy | **2.9× median, 7.1× best** |
-| Speedup vs numpy with preallocated `out=` | **2.2× median, 5.0× best** |
+| Speedup vs idiomatic numpy | **2.9× median, 8.2× best** |
+| Speedup vs numpy with preallocated `out=` | **2.2× median, 4.7× best** |
 | Matrix multiply, % of this core's measured NEON ceiling | **97.6%** |
 | Vectorised `exp` accuracy | **1 ULP max**, 91.3% bit-identical to libm |
 | Vectorised `tanh` accuracy | **2 ULP max** (254 before it was fixed) |
-| Vectorised `exp` throughput | **2.57 billion/second**, one core |
+| Vectorised `exp` throughput | **3.1 billion/second**, one core |
 | Neural network trained on emitted code, vs float64 reference | **1.4 × 10⁻⁴** relative, 300 steps |
 | Non-standard-library imports under `kiln/` | **0** |
 
@@ -137,27 +138,32 @@ the layout they already have.
 
 `bench/roofline.py` first measures what this core can actually do, using a
 kernel of nothing but independent FMAs (**103.3 GFLOP/s**, exactly 4.00 per
-cycle) and a kernel of nothing but streaming loads (**61.6 GB/s**). Against
+cycle) and a kernel of nothing but streaming loads (**61.2 GB/s**). Against
 that measured ceiling:
 
 | shape | plain | blocked | % of ceiling |
 |---|---|---|---|
-| 128³ | 100.7 | 100.6 | **97.6%** |
-| 512³ | 97.8 | 97.0 | 94.7% |
-| 1024³ | 85.8 | 93.2 | 90.2% |
-| 2048³ | 18.8 | **81.7** | 79.1% |
+| 64³ | 95.7 | 94.5 | 92.7% |
+| 128³ | 100.8 | 100.7 | **97.6%** |
+| 256³ | 98.4 | 98.3 | 95.3% |
+| 512³ | 97.5 | 96.2 | 94.4% |
+| 1024³ | 87.8 | 87.1 | 85.1% |
+| 2048³ | 16.2 | **77.2** | 74.8% |
 
 Getting the ceiling right took two tries. Measuring FMA throughput with only
 8 independent accumulator chains reports 2.00 per cycle, and 12 reports 3.00 —
 those are measurements of FMA *latency*, not throughput. Only at 16 chains
 does the real 4.00 appear.
 
-2048³ collapses to 18.8 GFLOP/s without cache blocking — 18% of the ceiling —
-because a column strip of B is re-streamed from DRAM for every row panel of A.
-Holding a cache-sized block of B resident instead gives **81.7**. That 4.3× is
+Blocking is not a free win everywhere: below 2048³ it is a wash or a shade
+behind, because the problem already fits in cache. It matters at the top end.
+2048³ collapses to 16.2 GFLOP/s without it — 16% of the ceiling — because a
+column strip of B is re-streamed from DRAM for every row panel of A.
+Holding a cache-sized block of B resident instead gives **77.2**. That 4.8× is
 the single largest measured improvement in the project, and the inner loop's
 instructions are byte-for-byte identical before and after. Only the order
-changed.
+changed. The unblocked figure is the least stable number here — it is cache
+thrashing, so it swings between about 16 and 19 GFLOP/s run to run.
 
 **What this does not beat.** Apple's Accelerate reaches ~2,100 GFLOP/s here,
 roughly 20× more. Not by writing better NEON — by dispatching to AMX, an
@@ -170,8 +176,8 @@ hiding.
 
 `kiln/tune.py`. Forty candidate schedules per kernel, and the best one moves
 with the size of the data and the shape of the expression — the spread
-between the best and worst schedule is up to **2.77×**, so choosing badly is
-expensive.
+between the best and worst schedule has a median of 2.0× and reaches
+**16.2×** on the worst kernel, so choosing badly is expensive.
 
 Measuring all forty is correct and slow. So KILN fits ridge regression on
 features of the *generated code* — instructions per element, loads per
@@ -186,19 +192,19 @@ far more. So the model ranks all 40 and only 5 get timed.
 
 | | |
 |---|---|
-| guided / exhaustive-best | **1.009× median**, 1.62× worst |
-| within 2% of the true optimum | 33 / 48 cases |
+| guided / exhaustive-best | **1.019× median**, 1.38× worst |
+| within 2% of the true optimum | 27 / 48 cases |
 | candidates ranked vs timed | 40 ranked, **5 timed** |
-| ranking cost | 10 ms, compiles everything, times nothing |
+| ranking cost | 7 ms, compiles everything, times nothing |
 
-The honest reading: at the median it finds the optimum, and its worst case is
-62% off. It is a shortlist generator, not an oracle, and that is what the
-numbers say.
+The honest reading: at the median it lands within 2% of the optimum, it is
+inside 2% on just over half the cases, and its worst case is 38% off. It is a
+shortlist generator, not an oracle, and that is what the numbers say.
 
 ### 6. A neural network, trained end to end
 
 `kiln/nn.py`. Forward, backward and the optimiser step all run on kernels
-this project emitted — the 8×8 matmul, a tiled register transpose (**5.9×
+this project emitted — the 8×8 matmul, a tiled register transpose (**4.7–5.4×
 numpy**), bias+ReLU as a two-level loop, ReLU's derivative as a fused
 `step` op, MSE loss as a fused reduction, and SGD-with-momentum as a fused
 map that updates velocity and weights in one pass over memory.
@@ -214,7 +220,7 @@ hyperparameters — in float64 numpy and compares the loss curves step by step.
      299    0.02984627     0.02984953   1.09e-04
 
 loss fell 60.5x    max relative gap 1.4e-04 over 300 steps
-57.3 GFLOP/s sustained    0.38 ms/step
+67.7 GFLOP/s sustained    0.33 ms/step
 ```
 
 Errors in backpropagation compound. A transpose off by a row, a gradient with
@@ -283,9 +289,9 @@ than 4,096 terms. Both halves of the trade are measured in
 
 | n | plain error | plain | kahan error | kahan | numpy error | numpy |
 |---|---|---|---|---|---|---|
-| 65 K | 1.7e-07 | 8.9 µs | 9.6e-08 | 19.2 µs | 7.0e-09 | 35.7 µs |
-| 1 M | 4.3e-06 | 174.7 µs | **4.4e-08** | 297.4 µs | 4.5e-08 | 736.3 µs |
-| 16 M | 2.8e-04 | 2177 µs | **6.0e-08** | 4697 µs | 6.0e-08 | 14679 µs |
+| 65 K | 1.71e-07 | 6.8 µs | 9.60e-08 | 13.4 µs | 6.99e-09 | 24.7 µs |
+| 1 M | 4.33e-06 | 120.2 µs | **4.43e-08** | **204.3** µs | 4.50e-08 | 575.9 µs |
+| 16 M | 2.77e-04 | 2153.4 µs | **6.03e-08** | **3303.3** µs | 6.03e-08 | 11169.9 µs |
 
 At 16 M elements the compensated reduction matches numpy's accuracy to three
 significant figures while running **3.1× faster**.
@@ -300,14 +306,14 @@ would write with preallocated `out=` arrays.
 
 | kernel | 16 M elements | vs numpy | vs numpy+`out=` |
 |---|---|---|---|
-| `(a*b+c*d)*(a-d) + (b*c-a*a)` | 5.3 ms | **7.1×** | 3.9× |
-| `1/(1+exp(-x))` | 9.3 ms | 5.1× | 3.4× |
-| `sum((a-b)²)` | 3.2 ms | 4.5× | 2.1× |
-| `(a*b+c)*a - b` | 4.3 ms | 2.9× | 2.2× |
-| softmax | 17.0 ms | 2.7× | 2.0× |
-| gelu | 22.5 ms | 2.4× | 1.4× |
-| `a*2.5 + b` | 3.2 ms | 2.4× | 1.2× |
-| layernorm | 10.8 ms | 1.8× | 1.2× |
+| `(a*b+c*d)*(a-d) + (b*c-a*a)` | 5.4 ms | **7.91×** | 3.89× |
+| `1/(1+exp(-x))` | 9.5 ms | 5.42× | 3.46× |
+| `sum((a-b)²)` | 3.3 ms | 5.11× | 2.18× |
+| `(a*b+c)*a - b` | 4.3 ms | 3.24× | 2.29× |
+| softmax | 17.7 ms | 2.77× | 2.02× |
+| `a*2.5 + b` | 3.3 ms | 2.75× | 1.23× |
+| gelu | 23.5 ms | 2.43× | 1.39× |
+| layernorm | 11.2 ms | 2.07× | 1.19× |
 
 The pattern is the whole thesis: the more operators in the expression, the
 bigger the win, because that is exactly how many memory passes fusion
