@@ -29,7 +29,7 @@ fn.run({"a": A, "b": B, "c": C, "out": OUT})
 That expression compiles to **one loop** that touches each element once and
 allocates nothing. numpy has to walk memory four times and allocate three
 temporaries, because a library sees four separate operators and a compiler
-sees one expression. On 16 M elements that is the difference between 12.5 ms
+sees one expression. On 16 M elements that is the difference between 14.0 ms
 and 4.3 ms.
 
 ---
@@ -294,7 +294,7 @@ than 4,096 terms. Both halves of the trade are measured in
 | 16 M | 2.77e-04 | 2153.4 µs | **6.03e-08** | **3303.3** µs | 6.03e-08 | 11169.9 µs |
 
 At 16 M elements the compensated reduction matches numpy's accuracy to three
-significant figures while running **3.1× faster**.
+significant figures while running **3.4× faster**.
 
 ---
 
@@ -315,17 +315,23 @@ would write with preallocated `out=` arrays.
 | gelu | 23.5 ms | 2.43× | 1.39× |
 | layernorm | 11.2 ms | 2.07× | 1.19× |
 
-The pattern is the whole thesis: the more operators in the expression, the
-bigger the win, because that is exactly how many memory passes fusion
-removes. `axpy` has two operators and wins least. The nine-operator
-expression wins most.
+The pattern is the whole thesis: broadly, the more operators in the
+expression, the bigger the win, because that is exactly how many memory passes
+fusion removes. The nine-operator expression wins most; two-operator `axpy`
+sits near the bottom.
+
+It is not a clean monotone, and the exceptions are informative. `gelu` has
+plenty of operators but places low, because its accurate `tanh` runs two
+formulas per lane and needs so many constant registers that the unroll factor
+collapses to 1. `layernorm` is low because two of its three passes are
+reductions, which numpy already does well.
 
 **Where numpy wins.** Matrix multiply, by roughly 25×, via AMX. That is not
 close and it is not going to be.
 
 **Accuracy against a float64 evaluation**, across all 32 benchmark
 configurations: KILN's worst is 4.2e-07, numpy's is 1.6e-07, and KILN is at
-least as accurate as numpy in 19 of 32 cases. The two engines land on
+least as accurate as numpy in 18 of 32 cases. The two engines land on
 different bits because KILN's fused multiply-adds round once where numpy
 rounds twice — "differs from numpy" and "is wrong" are different claims and
 are measured separately here.
@@ -350,11 +356,12 @@ kiln/
   runtime.py      buffers, the pointer table, timing
 
 tour.py           a guided walkthrough that runs the compiler in front of you
+run_all.py        runs every suite below
 tests/            verify_isa, verify_listing, verify_kernels, verify_exp,
                   verify_training
 bench/            vs_numpy, roofline, reduction_tradeoff, autotune_study
-tools/fit_exp.py  Remez exchange for the exp polynomial
-run_all.py        runs all of it
+tools/            fit_exp and fit_tanh (Remez exchange for the polynomials),
+                  build_page (wraps web/page.html into docs/ for Pages)
 ```
 
 `numpy` appears only in `tests/` and `bench/`, as the thing being measured
