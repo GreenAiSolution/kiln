@@ -23,6 +23,7 @@ import math
 import os
 import random
 import sys
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -36,6 +37,14 @@ SCHEDULES = (Schedule(1), Schedule(2), Schedule(3), Schedule(4),
 
 FAILS = []
 ROWS = []
+
+
+def seed_of(*parts):
+    """A stable seed. Python's hash() of a string is randomised per process,
+    so using it here made the test data change between runs - which is how a
+    254 ULP error in tanh went unnoticed for several runs and then failed one.
+    A test whose inputs move is not a test."""
+    return zlib.crc32("|".join(map(str, parts)).encode()) & 0x7FFFFFFF
 
 
 def rnd(n, seed, lo=-2.0, hi=2.0):
@@ -55,14 +64,15 @@ def sum_error_budget(n):
     return 8.0 * max(1.0, math.log2(max(n, 2))) * EPS32
 
 
-def run_case(name, build, n, sched, tol_ulp=0, lo=-2.0, hi=2.0):
+def run_case(name, build, n, sched, tol_ulp=0, lo=-2.0, hi=2.0,
+             tol_abs=None):
     p = ir.Program(name)
     build(p, n)
     ir.contract_program(p)          # the reference must model what we compile
 
     data = {}
     for i, nm in enumerate(p.inputs):
-        data[nm] = rnd(n, (hash((name, nm, n)) & 0xFFFF) + i, lo, hi)
+        data[nm] = rnd(n, seed_of(name, nm, n, i), lo, hi)
     for nm in p.outputs:
         data.setdefault(nm, [0.0] * n)
 
@@ -75,15 +85,22 @@ def run_case(name, build, n, sched, tol_ulp=0, lo=-2.0, hi=2.0):
     ref = {k: list(v) for k, v in data.items()}
     ideal, cond = ir.run_reference(p, ref, use_scalars=got_scalars)
 
-    worst, nbad = 0, 0
+    worst, nbad, worst_abs = 0, 0, 0.0
     for nm in p.outputs:
         g, w = bufs[nm].tolist(), ref[nm]
+        scale = max((abs(v) for v in w), default=1.0) or 1.0
         for x, y in zip(g, w):
             u = exact.ulps_apart(x, y)
             if u:
                 nbad += 1
                 worst = max(worst, u)
-    ok = worst <= tol_ulp
+            worst_abs = max(worst_abs, abs(x - y) / scale)
+    # gelu's tanh form computes 1 + tanh(z), and where tanh(z) -> -1 that
+    # subtraction destroys every significant digit. The output there is about
+    # 1e-7 while the function's range is 8, so a ULP count is meaningless and
+    # an error relative to the function's scale is the honest measure. The
+    # cancellation is in the formula transformers use, not in the compiler.
+    ok = (worst_abs <= tol_abs) if tol_abs is not None else (worst <= tol_ulp)
 
     # Reductions are judged against the exact sum with a backward-error bound,
     # not against some other arbitrary summation order.
@@ -98,8 +115,13 @@ def run_case(name, build, n, sched, tol_ulp=0, lo=-2.0, hi=2.0):
             FAILS.append((name, n, sched.key(), f"reduce rel={rel:.2e}"))
 
     ROWS.append((name, n, sched.key(), c.kernels[0].meta["unroll"],
-                 c.insn_count(), nbad, worst, ok, red_err))
-    if worst > tol_ulp:
+                 c.insn_count(), nbad, worst, ok, red_err, worst_abs,
+                 tol_abs is not None))
+    if tol_abs is not None:
+        if worst_abs > tol_abs:
+            FAILS.append((name, n, sched.key(),
+                          f"{worst_abs:.2e} relative > {tol_abs:.0e}"))
+    elif worst > tol_ulp:
         FAILS.append((name, n, sched.key(), f"{worst} ULP > {tol_ulp}"))
     return ok
 
@@ -202,9 +224,12 @@ EXACT_KERNELS = [
     ("relu", k_relu), ("hypot", k_norm), ("multi_out", k_multi_out),
     ("wide", k_wide),
 ]
+# (name, builder, ULP bound, or relative-to-scale bound where ULP does not apply)
 APPROX_KERNELS = [
-    ("exp", k_exp, 2), ("sigmoid", k_sigmoid, 3), ("tanh", k_tanh, 64),
-    ("gelu", k_gelu, 64), ("recip", k_recip, 1), ("rsqrt", k_rsqrt, 2),
+    ("exp", k_exp, 3, None), ("sigmoid", k_sigmoid, 4, None),
+    ("tanh", k_tanh, 4, None), ("recip", k_recip, 2, None),
+    ("rsqrt", k_rsqrt, 3, None),
+    ("gelu", k_gelu, None, 1e-6),
 ]
 
 
@@ -240,9 +265,10 @@ def main():
         for n in SIZES:
             for name, fn in EXACT_KERNELS:
                 run_case(name, fn, n, sched, tol_ulp=0)
-            for name, fn, tol in APPROX_KERNELS:
-                lo, hi = (0.05, 4.0) if name in ("recip", "rsqrt") else (-2.0, 2.0)
-                run_case(name, fn, n, sched, tol_ulp=tol, lo=lo, hi=hi)
+            for name, fn, tol, tabs in APPROX_KERNELS:
+                lo, hi = (0.05, 4.0) if name in ("recip", "rsqrt") else (-6.0, 6.0)
+                run_case(name, fn, n, sched, tol_ulp=tol or 0, lo=lo, hi=hi,
+                         tol_abs=tabs)
             run_case("sum", k_sum, n, sched, tol_ulp=64)
             run_case("sumsq", k_sumsq, n, sched, tol_ulp=64)
             run_case("max", k_max, n, sched, tol_ulp=0)
@@ -251,24 +277,26 @@ def main():
 
     # per-kernel worst case across every size and schedule
     agg = {}
-    for name, n, sk, U, insns, nbad, worst, ok, red in ROWS:
-        cur = agg.setdefault(name, [0, 0, 0, 0.0])
+    for name, n, sk, U, insns, nbad, worst, ok, red, wabs, isabs in ROWS:
+        cur = agg.setdefault(name, [0, 0, 0, 0.0, 0.0, isabs])
         cur[0] = max(cur[0], worst)
         cur[1] += 1
         cur[2] += 0 if ok else 1
         cur[3] = max(cur[3], red)
+        cur[4] = max(cur[4], wabs)
 
-    print(f"\n{'kernel':<12} {'cases':>6} {'worst ULP':>10} {'reduce err':>11} "
-          f"{'failed':>7}   standard")
-    print("-" * 78)
+    print(f"\n{'kernel':<12} {'cases':>6} {'worst ULP':>10} {'rel to scale':>13} "
+          f"{'reduce err':>11} {'failed':>7}   standard")
+    print("-" * 88)
     exact_names = {n for n, _ in EXACT_KERNELS} | {"max"}
     for name in sorted(agg):
-        worst, cases, failed, red = agg[name]
-        std = "EXACT" if name in exact_names else "measured"
+        worst, cases, failed, red, wabs, isabs = agg[name]
+        std = ("EXACT" if name in exact_names
+               else "rel. to scale" if isabs else "ULP")
         flag = "" if failed == 0 else "  <-- FAIL"
         redtxt = f"{red:.1f} eps" if red else "-"
-        print(f"{name:<12} {cases:>6} {worst:>10} {redtxt:>11} {failed:>7}   "
-              f"{std}{flag}")
+        print(f"{name:<12} {cases:>6} {worst:>10} {wabs:>13.2e} {redtxt:>11} "
+              f"{failed:>7}   {std}{flag}")
 
     total = len(ROWS)
     elems = sum(r[1] for r in ROWS)

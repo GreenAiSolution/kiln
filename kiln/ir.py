@@ -28,7 +28,7 @@ def f32(x):
 
 
 BINARY = {"add", "sub", "mul", "div", "max", "min"}
-UNARY = {"neg", "abs", "sqrt", "recip", "rsqrt", "exp", "step"}
+UNARY = {"neg", "abs", "sqrt", "recip", "rsqrt", "exp", "step", "tanh"}
 LEAF = {"load", "const", "sarg"}
 TERNARY = {"fma"}          # fma(a, b, c) = a*b + c, one rounding
 
@@ -162,14 +162,32 @@ def sigmoid(a):
 
 
 def tanh(a):
+    """A primitive, not (e^2x-1)/(e^2x+1).
+
+    That formula loses almost all of its digits near zero, where the
+    numerator subtracts two nearly equal numbers - measured at 254 ULP. KILN
+    lowers tanh to a minimax polynomial for small arguments and the exp form
+    beyond, selected without a branch. See tools/fit_tanh.py."""
+    return Expr("tanh", (a,))
+
+
+def tanh_fast(a):
+    """(e^2x - 1)/(e^2x + 1).
+
+    About 2.3x faster than tanh() because it evaluates one formula instead of
+    two, and measured at 254 ULP near zero because of the cancellation that
+    costs. Offered because for some uses that is the right trade - but it is
+    not the default, and the number is stated rather than discovered later.
+    """
     e = exp(a * 2.0)
     return (e - 1.0) * recip(e + 1.0)
 
 
-def gelu(a):
-    """tanh approximation, the one transformers actually use."""
+def gelu(a, fast=False):
+    """The tanh approximation, the one transformers actually use."""
+    t = tanh_fast if fast else tanh
     inner = 0.7978845608028654 * (a + 0.044715 * (a * a * a))
-    return a * 0.5 * (tanh(inner) + 1.0)
+    return a * 0.5 * (t(inner) + 1.0)
 
 
 # ------------------------------------------------------------------ stages
@@ -366,6 +384,8 @@ def eval_expr(e, i, bufs, scalars, cache=None):
             v = exact.div32(1.0, exact.sqrt32(a[0]))
         elif op == "step":
             v = 1.0 if a[0] > 0.0 else 0.0
+        elif op == "tanh":
+            v = f32(math.tanh(a[0]))
         elif op == "exp":
             v = f32(math.exp(a[0]))
         elif op == "fma":

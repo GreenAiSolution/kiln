@@ -7,7 +7,7 @@ own assembler produces for the same mnemonic.
 Whole-kernel verification
 ==========================================================================
 whole kernels re-assembled : 159
-instructions compared      : 16,561
+instructions compared      : 15,732
 mismatches                 : 0
 
 modules under kiln/        : 13
@@ -18,26 +18,26 @@ PASS
 KILN kernel verification
 ==========================================================================
 
-kernel        cases  worst ULP  reduce err  failed   standard
-------------------------------------------------------------------------------
-axpy             77          0           -       0   EXACT
-chain            77          0           -       0   EXACT
-exp              77          1           -       0   measured
-gelu             77         32           -       0   measured
-hypot            77          0           -       0   EXACT
-layernorm        77          2     3.0 eps       0   measured
-max              77          0           -       0   EXACT
-multi_out        77          0           -       0   EXACT
-poly5            77          0           -       0   EXACT
-recip            77          1           -       0   measured
-relu             77          0           -       0   EXACT
-rsqrt            77          2           -       0   measured
-sigmoid          77          3           -       0   measured
-softmax          77          2     1.5 eps       0   measured
-sum              77          0     0.3 eps       0   measured
-sumsq            77          0     1.5 eps       0   measured
-tanh             77        254           -       7   measured  <-- FAIL
-wide             77          0           -       0   EXACT
+kernel        cases  worst ULP  rel to scale  reduce err  failed   standard
+----------------------------------------------------------------------------------------
+axpy             77          0      0.00e+00           -       0   EXACT
+chain            77          0      0.00e+00           -       0   EXACT
+exp              77          1      7.75e-08           -       0   ULP
+gelu             77  874843380      8.17e-08           -       0   rel. to scale
+hypot            77          0      0.00e+00           -       0   EXACT
+layernorm        77          2      1.35e-07     2.3 eps       0   ULP
+max              77          0      0.00e+00           -       0   EXACT
+multi_out        77          0      0.00e+00           -       0   EXACT
+poly5            77          0      0.00e+00           -       0   EXACT
+recip            77          1      9.56e-08           -       0   ULP
+relu             77          0      0.00e+00           -       0   EXACT
+rsqrt            77          2      1.16e-07           -       0   ULP
+sigmoid          77          3      1.79e-07           -       0   ULP
+softmax          77          3      1.76e-07     2.0 eps       0   ULP
+sum              77          0      0.00e+00     0.2 eps       0   ULP
+sumsq            77          0      0.00e+00     3.1 eps       0   ULP
+tanh             77          2      1.19e-07           -       0   ULP
+wide             77          0      0.00e+00           -       0   EXACT
 --------------------------------------------------------------------------
 1386 kernels compiled and checked, 9,075,402 elements compared element by element
 schedules: 7   sizes: 11
@@ -49,14 +49,7 @@ reduction accuracy (vs exact sum)
     262144     3.007e-08         4.504e-06    149.8x
    1048576     1.952e-09         6.577e-07    337.0x
 
-FAILURES: 7
-   ('tanh', 65536, (1, 0, 'auto'), '254 ULP > 64')
-   ('tanh', 65536, (2, 0, 'auto'), '254 ULP > 64')
-   ('tanh', 65536, (3, 0, 'auto'), '254 ULP > 64')
-   ('tanh', 65536, (4, 0, 'auto'), '254 ULP > 64')
-   ('tanh', 65536, (6, 0, 'auto'), '254 ULP > 64')
-   ('tanh', 65536, (8, 0, 'auto'), '254 ULP > 64')
-   ('tanh', 65536, (4, 256, 'auto'), '254 ULP > 64')
+All kernels within their stated standard.
 KILN vectorised exp - measured on hardware
 ==============================================================================
 polynomial degree : 6 (minimax, from tools/fit_exp.py)
@@ -70,7 +63,7 @@ constants         : 12 vector registers
   near overflow                100003 pts   max 1 ULP   bit-exact  91.2%   [0:91.2% 1:8.8%]
   near underflow               100003 pts   max 1 ULP   bit-exact  91.2%   [0:91.2% 1:8.8%]
 
-throughput        : 1.92 billion exp/s (0.52 ns each, one core)
+throughput        : 2.59 billion exp/s (0.39 ns each, one core)
 
 worst over all sweeps: 1 ULP  -> PASS (bound 2)
 KILN neural network - trained entirely on emitted machine code
@@ -98,27 +91,28 @@ max relative gap : 1.397e-04 over all 300 steps
 gap at final step: 1.091e-04
 steps that improved: 298/299
 
-training time    : 154 ms for 300 steps (0.51 ms/step)
-arithmetic       : 22.0 MFLOP per step, 42.9 GFLOP/s sustained
+training time    : 114 ms for 300 steps (0.38 ms/step)
+arithmetic       : 22.0 MFLOP per step, 57.9 GFLOP/s sustained
+curve written to /Users/greenai/greenai-kiln/results/training_curve.json
 
 PASS - the float32 network tracks the float64 reference and the loss came down.
 Machine ceilings, measured by KILN's own emitted code
 ==========================================================================
-vector FMA peak      :     70.6 GFLOP/s  (2.74 FMA/cycle at 3.228 GHz)
-streaming load peak  :     51.7 GB/s      (single core, 67 MB per pass)
+vector FMA peak      :     85.6 GFLOP/s  (3.32 FMA/cycle at 3.228 GHz)
+streaming load peak  :     61.0 GB/s      (single core, 67 MB per pass)
 
 KILN matmul against the compute ceiling
              shape   GFLOP/s  % of peak  flops/insn    code
-  64x64x64            58.6      83.0%        6.10    548B
-  128x128x128           61.8      87.4%        6.10    548B
-  256x256x256           60.0      84.9%        6.10    548B
-  512x512x512           53.3      75.4%        6.10    548B
-  1024x1024x1024          48.3      68.4%        6.10    548B
-  2048x2048x2048          14.1      20.0%        6.10    548B
+  64x64x64            79.3      92.6%        6.10    548B
+  128x128x128           83.5      97.6%        6.10    548B
+  256x256x256           80.9      94.5%        6.10    548B
+  512x512x512           81.0      94.7%        6.10    548B
+  1024x1024x1024          75.5      88.2%        6.10    548B
+  2048x2048x2048          18.2      21.2%        6.10    548B
 
 What the ceiling means
-  This core can retire about 2.7 4-wide FMAs per cycle.
-  KILN's matmul reaches 87% of that with no packing pass and no assembler.
+  This core can retire about 3.3 4-wide FMAs per cycle.
+  KILN's matmul reaches 98% of that with no packing pass and no assembler.
 
   Apple's Accelerate beats this by roughly an order of magnitude,
   and not by writing better NEON: it dispatches to AMX, an on-die
@@ -131,54 +125,54 @@ KILN vs numpy   (Apple M1 Max, float32, single core)
 
 n = 4,096   L1 (16 KB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy             0.70      1.93       1.70     2.77x      2.44x    70.4  3.42e-08   6.85e-08
-  chain            1.02      3.18       3.14     3.10x      3.06x    64.0  9.13e-08   1.14e-07
-  wide             1.50      8.26       7.06     5.50x      4.70x    54.5  5.63e-08   5.47e-08
-  sigmoid          3.68     14.56      13.90     3.96x      3.78x     8.9  1.04e-07   8.87e-08
-  gelu             6.28     15.10      14.17     2.41x      2.26x     5.2  9.03e-08   9.77e-08
-  sumsq            1.07      4.56       4.34     4.25x      4.04x    30.5  1.61e-08   1.61e-08
-  softmax          7.28     16.94      16.52     2.33x      2.27x     6.7  1.65e-07   8.13e-08
-  layernorm        4.90     14.58      13.00     2.98x      2.66x    10.0  1.15e-07   1.60e-07
+  axpy             0.65      1.58       1.41     2.45x      2.19x    76.1  3.42e-08   6.85e-08
+  chain            0.85      2.61       2.59     3.09x      3.06x    77.5  9.13e-08   1.14e-07
+  wide             1.24      6.74       5.90     5.43x      4.75x    66.0  5.63e-08   5.47e-08
+  sigmoid          3.04     10.82      10.30     3.56x      3.39x    10.8  1.04e-07   8.87e-08
+  gelu             6.96     11.22      10.57     1.61x      1.52x     4.7  9.25e-08   9.77e-08
+  sumsq            0.87      3.73       3.64     4.28x      4.18x    37.6  1.61e-08   1.61e-08
+  softmax          5.99     12.46      12.25     2.08x      2.04x     8.2  1.65e-07   8.13e-08
+  layernorm        3.62     10.63       9.70     2.93x      2.68x    13.6  1.15e-07   1.60e-07
 
 n = 65,536   L2 (256 KB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy            14.62     19.92      19.71     1.36x      1.35x    53.8  3.42e-08   6.84e-08
-  chain           19.74     48.71      46.56     2.47x      2.36x    53.1  9.37e-08   1.16e-07
-  wide            25.15    103.71     103.67     4.12x      4.12x    52.1  6.69e-08   7.97e-08
-  sigmoid         58.98    204.08     201.58     3.46x      3.42x     8.9  1.12e-07   9.17e-08
-  gelu            93.37    188.71     206.17     2.02x      2.21x     5.6  1.01e-07   1.15e-07
-  sumsq           12.52     45.58      47.02     3.64x      3.76x    41.9  4.16e-07   2.71e-08
-  softmax        113.37    244.50     216.17     2.16x      1.91x     6.9  2.22e-07   9.53e-08
-  layernorm       47.52     77.71      87.62     1.64x      1.84x    16.5  1.42e-07   3.57e-08
+  axpy            10.83     16.25      14.63     1.50x      1.35x    72.6  3.42e-08   6.84e-08
+  chain           14.56     38.25      38.76     2.63x      2.66x    72.0  9.37e-08   1.16e-07
+  wide            18.64     80.12      80.02     4.30x      4.29x    70.3  6.69e-08   7.97e-08
+  sigmoid         43.61    150.87     149.21     3.46x      3.42x    12.0  1.12e-07   9.17e-08
+  gelu           106.29    139.17     134.96     1.31x      1.27x     4.9  1.10e-07   1.15e-07
+  sumsq            8.17     29.96      30.79     3.67x      3.77x    64.2  4.16e-07   2.71e-08
+  softmax         74.17    162.42     162.13     2.19x      2.19x    10.6  2.22e-07   9.53e-08
+  layernorm       35.10     61.00      60.08     1.74x      1.71x    22.4  1.42e-07   3.57e-08
 
 n = 1,048,576   L2/SLC (4 MB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy           246.83    553.17     333.54     2.24x      1.35x    51.0  3.41e-08   6.82e-08
-  chain          344.42   1064.13     880.42     3.09x      2.56x    48.7  9.45e-08   1.17e-07
-  wide           433.50   2901.08    1944.96     6.69x      4.49x    48.4  7.17e-08   9.25e-08
-  sigmoid        950.92   4656.54    3196.79     4.90x      3.36x     8.8  1.18e-07   9.43e-08
-  gelu          1485.17   4912.79    2936.46     3.31x      1.98x     5.6  1.12e-07   1.23e-07
-  sumsq          329.87   1120.25     639.75     3.40x      1.94x    25.4  3.01e-08   3.01e-08
-  softmax       1706.92   4173.83    3418.08     2.45x      2.00x     7.4  1.16e-07   8.65e-08
-  layernorm     1096.12   1511.50    1177.17     1.38x      1.07x    11.5  7.51e-08   1.07e-07
+  axpy           189.42    475.71     266.75     2.51x      1.41x    66.4  3.41e-08   6.82e-08
+  chain          265.21    797.04     632.83     3.01x      2.39x    63.3  9.45e-08   1.17e-07
+  wide           338.50   2987.17    1434.92     8.82x      4.24x    62.0  7.17e-08   9.25e-08
+  sigmoid        704.21   3205.46    2359.87     4.55x      3.35x    11.9  1.18e-07   9.43e-08
+  gelu          1695.71   3475.67    2174.54     2.05x      1.28x     4.9  1.27e-07   1.23e-07
+  sumsq          244.79    893.67     489.42     3.65x      2.00x    34.3  3.01e-08   3.01e-08
+  softmax       1258.54   2733.67    2493.29     2.17x      1.98x    10.0  1.16e-07   8.65e-08
+  layernorm      810.67   1250.83     875.08     1.54x      1.08x    15.5  7.51e-08   1.07e-07
 
 n = 16,777,216   DRAM (64 MB/array)
   kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
-  axpy          3701.58  13524.50    5691.67     3.65x      1.54x    54.4  3.41e-08   6.81e-08
-  chain         5118.50  22313.62   16927.50     4.36x      3.31x    52.4  9.46e-08   1.18e-07
-  wide          6844.00  75755.42   39163.12    11.07x      5.72x    49.0  7.94e-08   9.98e-08
-  sigmoid      17190.21  80283.71   55309.79     4.67x      3.22x     7.8  1.18e-07   9.48e-08
-  gelu         23880.37  89618.54   58300.38     3.75x      2.44x     5.6  1.17e-07   1.32e-07
-  sumsq         5250.67  24666.79   12309.62     4.70x      2.34x    25.6  6.40e-08   2.54e-08
-  softmax      27422.67  76601.46   60677.54     2.79x      2.21x     7.3  1.45e-07   1.44e-07
-  layernorm    18918.58  33990.08   21571.71     1.80x      1.14x    10.6  8.31e-08   6.05e-08
+  axpy          3274.42   8563.38    4576.50     2.62x      1.40x    61.5  3.41e-08   6.81e-08
+  chain         4337.58  14239.33   10201.83     3.28x      2.35x    61.9  9.46e-08   1.18e-07
+  wide          6088.58  45057.29   23265.87     7.40x      3.82x    55.1  7.94e-08   9.98e-08
+  sigmoid      11178.58  55924.92   38363.79     5.00x      3.43x    12.0  1.18e-07   9.48e-08
+  gelu         27224.75  60437.79   35590.71     2.22x      1.31x     4.9  1.32e-07   1.32e-07
+  sumsq         3883.50  16477.08    8009.87     4.24x      2.06x    34.6  6.40e-08   2.54e-08
+  softmax      20330.33  54102.62   41138.13     2.66x      2.02x     9.9  1.45e-07   1.44e-07
+  layernorm    13007.62  22516.71   15174.54     1.73x      1.17x    15.5  8.31e-08   6.05e-08
 
 ============================================================================================
-speedup vs idiomatic numpy : median 3.31x   best 11.07x   worst 1.36x
-speedup vs numpy with out= : median 2.44x   best 5.72x   worst 1.07x
+speedup vs idiomatic numpy : median 2.93x   best 8.82x   worst 1.31x
+speedup vs numpy with out= : median 2.19x   best 4.75x   worst 1.08x
 worst error vs float64     : kiln 4.164e-07   numpy 1.604e-07
-cases where kiln is at least as accurate as numpy: 19/32
-compile time               : 0.73 ms average
+cases where kiln is at least as accurate as numpy: 18/32
+compile time               : 0.52 ms average
 wrote results/vs_numpy.json
 Reduction: what compensation buys and what it costs
 ============================================================================================
@@ -186,14 +180,211 @@ KAHAN_THRESHOLD = 4096 terms per accumulator lane
 
            n  terms/lane |   plain err   plain us |   kahan err   kahan us |   numpy err  numpy us |   auto
 --------------------------------------------------------------------------------------------
-       16384         683 |    5.11e-08        3.4 |    3.64e-08        6.2 |    3.64e-08      12.2 |  plain
-       65536        2731 |    1.71e-07       12.4 |    9.60e-08       24.3 |    6.99e-09      45.0 |  plain
-      262144       10923 |    1.65e-07       46.7 |    1.38e-08       93.4 |    1.38e-08     163.6 |  kahan
-     1048576       43691 |    4.33e-06      189.6 |    4.43e-08      370.4 |    4.50e-08     919.5 |  kahan
-     4194304      174763 |    3.38e-05      650.6 |    2.33e-08     1309.2 |    2.33e-08    2780.4 |  kahan
-    16777216      699051 |    2.77e-04     3968.1 |    6.03e-08     8110.6 |    6.03e-08   20907.2 |  kahan
+       16384         683 |    5.11e-08        2.5 |    3.64e-08        4.6 |    3.64e-08       9.1 |  plain
+       65536        2731 |    1.71e-07        8.2 |    9.60e-08       15.9 |    6.99e-09      31.4 |  plain
+      262144       10923 |    1.65e-07       30.0 |    1.38e-08       61.1 |    1.38e-08     106.9 |  kahan
+     1048576       43691 |    4.33e-06      140.8 |    4.43e-08      245.9 |    4.50e-08     632.7 |  kahan
+     4194304      174763 |    3.38e-05      536.0 |    2.33e-08      969.8 |    2.33e-08    1952.3 |  kahan
+    16777216      699051 |    2.77e-04     2146.9 |    6.03e-08     3882.1 |    6.03e-08   11391.3 |  kahan
 
 Reading this: at small sizes plain summation is already accurate and
 compensation is pure cost. At large sizes plain drifts by orders of
 magnitude and compensation is the only thing keeping the answer
 meaningful. The threshold is where those two curves cross.
+Collecting measurements (every kernel x size x schedule)
+====================================================================================
+  axpy        n=4096      best     0.63us with Schedule(unroll=6, prefetch=0, compensate=auto)  worst     1.00us  spread 1.59x
+  axpy        n=65536     best     7.93us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    18.65us  spread 2.35x
+  axpy        n=524288    best    78.19us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst   150.33us  spread 1.92x
+  axpy        n=4194304   best   722.37us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  1295.67us  spread 1.79x
+  chain       n=4096      best     0.79us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst     1.27us  spread 1.60x
+  chain       n=65536     best    11.76us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    26.73us  spread 2.27x
+  chain       n=524288    best   103.42us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst   193.92us  spread 1.88x
+  chain       n=4194304   best   885.71us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst  2278.46us  spread 2.57x
+  wide        n=4096      best     1.12us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst     1.59us  spread 1.42x
+  wide        n=65536     best    15.75us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    35.06us  spread 2.23x
+  wide        n=524288    best   133.54us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst   250.29us  spread 1.87x
+  wide        n=4194304   best  1115.83us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  3048.83us  spread 2.73x
+  poly        n=4096      best     0.91us with Schedule(unroll=3, prefetch=256, compensate=auto)  worst     1.11us  spread 1.22x
+  poly        n=65536     best     9.79us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    12.80us  spread 1.31x
+  poly        n=524288    best    75.25us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    99.04us  spread 1.32x
+  poly        n=4194304   best   604.62us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst   904.75us  spread 1.50x
+  sigmoid     n=4096      best     2.97us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst     3.33us  spread 1.12x
+  sigmoid     n=65536     best    42.92us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst    48.51us  spread 1.13x
+  sigmoid     n=524288    best   340.46us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst   384.38us  spread 1.13x
+  sigmoid     n=4194304   best  2723.38us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst  3095.21us  spread 1.14x
+  gelu        n=4096      best     6.94us with Schedule(unroll=2, prefetch=256, compensate=auto)  worst     6.98us  spread 1.01x
+  gelu        n=65536     best   106.25us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst   106.67us  spread 1.00x
+  gelu        n=524288    best   847.04us with Schedule(unroll=6, prefetch=128, compensate=auto)  worst   849.38us  spread 1.00x
+  gelu        n=4194304   best  6774.50us with Schedule(unroll=5, prefetch=256, compensate=auto)  worst  7150.08us  spread 1.06x
+  hypot       n=4096      best     1.09us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst     1.14us  spread 1.05x
+  hypot       n=65536     best    12.74us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst    18.65us  spread 1.46x
+  hypot       n=524288    best    98.58us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst   139.83us  spread 1.42x
+  hypot       n=4194304   best   793.54us with Schedule(unroll=1, prefetch=0, compensate=auto)  worst  1338.04us  spread 1.69x
+  sum         n=4096      best     0.71us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst     1.72us  spread 2.40x
+  sum         n=65536     best     4.50us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst    74.35us  spread 16.51x
+  sum         n=524288    best    78.67us with Schedule(unroll=8, prefetch=512, compensate=auto)  worst   588.88us  spread 7.49x
+  sum         n=4194304   best   627.17us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst  4736.29us  spread 7.55x
+  sumsq       n=4096      best     0.89us with Schedule(unroll=6, prefetch=0, compensate=auto)  worst     1.73us  spread 1.95x
+  sumsq       n=65536     best     8.11us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst    74.35us  spread 9.17x
+  sumsq       n=524288    best   121.50us with Schedule(unroll=6, prefetch=0, compensate=auto)  worst   589.00us  spread 4.85x
+  sumsq       n=4194304   best   969.42us with Schedule(unroll=8, prefetch=0, compensate=auto)  worst  4720.67us  spread 4.87x
+  dot         n=4096      best     0.85us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst     1.73us  spread 2.03x
+  dot         n=65536     best     8.08us with Schedule(unroll=10, prefetch=0, compensate=auto)  worst    74.33us  spread 9.20x
+  dot         n=524288    best   121.00us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst   588.88us  spread 4.87x
+  dot         n=4194304   best   964.79us with Schedule(unroll=10, prefetch=1024, compensate=auto)  worst  4709.42us  spread 4.88x
+  multi       n=4096      best     1.04us with Schedule(unroll=2, prefetch=0, compensate=auto)  worst     1.40us  spread 1.34x
+  multi       n=65536     best    19.90us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst    40.19us  spread 2.02x
+  multi       n=524288    best   166.04us with Schedule(unroll=8, prefetch=1024, compensate=auto)  worst   321.83us  spread 1.94x
+  multi       n=4194304   best  1304.79us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst  2573.33us  spread 1.97x
+  scale_relu  n=4096      best     0.82us with Schedule(unroll=5, prefetch=0, compensate=auto)  worst     1.15us  spread 1.41x
+  scale_relu  n=65536     best    10.19us with Schedule(unroll=3, prefetch=0, compensate=auto)  worst    18.71us  spread 1.84x
+  scale_relu  n=524288    best    64.83us with Schedule(unroll=4, prefetch=0, compensate=auto)  worst   141.29us  spread 2.18x
+  scale_relu  n=4194304   best   802.33us with Schedule(unroll=8, prefetch=512, compensate=auto)  worst  1486.17us  spread 1.85x
+
+1920 measurements in 27.8s
+schedule spread (worst/best): median 1.87x   max 16.51x   min 1.00x
+   ^ this is the entire prize. A tuner cannot beat the best schedule, only find it.
+in-sample R^2 : 0.6990
+
+Leave-one-kernel-out: the model never sees the kernel it schedules
+====================================================================================
+  held out      default us  guided us   best us  guided/best  vs default     R^2
+  axpy                0.68       0.63      0.63       1.005x       1.07x  -1.202
+  axpy               10.28      10.81      7.93       1.362x       0.95x  -1.202
+  axpy               78.38      84.27     78.19       1.078x       0.93x  -1.202
+  axpy              756.08     797.92    722.37       1.105x       0.95x  -1.202
+  chain               0.80       0.80      0.79       1.007x       1.01x   0.616
+  chain              13.42      14.48     11.76       1.231x       0.93x   0.616
+  chain             105.62     123.79    103.42       1.197x       0.85x   0.616
+  chain             879.38    1068.87    885.71       1.207x       0.82x   0.616
+  wide                1.21       1.12      1.12       1.002x       1.07x   0.403
+  wide               15.83      16.63     15.75       1.056x       0.95x   0.403
+  wide              138.46     142.08    133.54       1.064x       0.97x   0.403
+  wide             1136.92    1104.67   1115.83       0.990x       1.03x   0.403
+  poly                0.92       0.91      0.91       1.001x       1.01x  -3.201
+  poly                9.80       9.79      9.79       0.999x       1.00x  -3.201
+  poly               75.23      76.21     75.25       1.013x       0.99x  -3.201
+  poly              602.67     613.42    604.62       1.015x       0.98x  -3.201
+  sigmoid             3.09       3.32      2.97       1.117x       0.93x -1202.151
+  sigmoid            44.49      48.29     42.92       1.125x       0.92x -1202.151
+  sigmoid           354.04     383.96    340.46       1.128x       0.92x -1202.151
+  sigmoid          2840.96    3073.04   2723.38       1.128x       0.92x -1202.151
+  gelu                6.96       6.94      6.94       1.000x       1.00x -2143.305
+  gelu              106.25     106.29    106.25       1.000x       1.00x -2143.305
+  gelu              847.67     847.67    847.04       1.001x       1.00x -2143.305
+  gelu             6788.75    6794.25   6774.50       1.003x       1.00x -2143.305
+  hypot               1.15       1.09      1.09       1.007x       1.05x  -7.863
+  hypot              12.81      12.80     12.74       1.004x       1.00x  -7.863
+  hypot              99.37     100.92     98.58       1.024x       0.98x  -7.863
+  hypot             804.83     816.87    793.54       1.029x       0.99x  -7.863
+  sum                 0.85       0.73      0.71       1.018x       1.17x   0.636
+  sum                 5.42       4.51      4.50       1.002x       1.20x   0.636
+  sum               148.00      78.71     78.67       1.001x       1.88x   0.636
+  sum              1195.25     627.13    627.17       1.000x       1.91x   0.636
+  sumsq               0.88       0.89      0.89       1.001x       0.99x   0.756
+  sumsq               8.30       8.11      8.11       1.000x       1.02x   0.756
+  sumsq             149.63     121.54    121.50       1.000x       1.23x   0.756
+  sumsq            1194.42     969.63    969.42       1.000x       1.23x   0.756
+  dot                 0.87       0.86      0.85       1.018x       1.01x   0.757
+  dot                 8.29       8.10      8.08       1.002x       1.02x   0.757
+  dot               149.58     121.04    121.00       1.000x       1.24x   0.757
+  dot              1193.54     965.42    964.79       1.001x       1.24x   0.757
+  multi               1.10       1.04      1.04       0.998x       1.06x -135.955
+  multi              20.02      20.26     19.90       1.018x       0.99x -135.955
+  multi             169.50     170.37    166.04       1.026x       0.99x -135.955
+  multi            1305.17    1344.71   1304.79       1.031x       0.97x -135.955
+  scale_relu          0.85       0.82      0.82       1.002x       1.04x   0.583
+  scale_relu         10.25      10.25     10.19       1.006x       1.00x   0.583
+  scale_relu         78.63      85.77     64.83       1.323x       0.92x   0.583
+  scale_relu        815.17     801.21    802.33       0.999x       1.02x   0.583
+
+====================================================================================
+cases                        : 48
+guided / exhaustive-best     : median 1.007x   mean 1.049x   worst 1.362x
+within 2% of the true optimum: 31/48 (65%)
+speedup over the default     : median 1.00x   best 1.91x
+candidates ranked per kernel : 40, of which 5 were actually timed
+ranking cost                 : 7 ms (compiles all candidates, times none)
+
+What the model learned (largest weights on log ns/element):
+  leftover_frac      +3.9931
+  bias               -3.4786
+  spare_regs         +2.7197
+  inv_unroll         +1.9722
+  ld_per_elem        +1.4303
+  alu_per_elem       +1.3160
+  st_per_elem        +1.2140
+  insns_per_elem     -1.1367
+
+model saved to /Users/greenai/.kiln/cost_model.json (1920 samples)
+wrote results/autotune.json
+
+##############################################################################
+# Instruction encoder vs Apple's assembler
+# tests/verify_isa.py 
+##############################################################################
+[Instruction encoder vs Apple's assembler: ok in 0.1s]
+
+##############################################################################
+# Whole kernels + dependency audit
+# tests/verify_listing.py 
+##############################################################################
+[Whole kernels + dependency audit: ok in 8.2s]
+
+##############################################################################
+# Numerics of every generated kernel
+# tests/verify_kernels.py 
+##############################################################################
+[Numerics of every generated kernel: ok in 130.8s]
+
+##############################################################################
+# Vectorised exp, on hardware
+# tests/verify_exp.py 
+##############################################################################
+[Vectorised exp, on hardware: ok in 1.0s]
+
+##############################################################################
+# Neural network vs a float64 reference
+# tests/verify_training.py 
+##############################################################################
+[Neural network vs a float64 reference: ok in 0.3s]
+
+##############################################################################
+# Machine ceilings and matmul roofline
+# bench/roofline.py 
+##############################################################################
+[Machine ceilings and matmul roofline: ok in 9.2s]
+
+##############################################################################
+# Fused kernels vs numpy
+# bench/vs_numpy.py --seconds 0.08 --json results/vs_numpy.json
+##############################################################################
+[Fused kernels vs numpy: ok in 24.7s]
+
+##############################################################################
+# Reduction accuracy vs speed
+# bench/reduction_tradeoff.py 
+##############################################################################
+[Reduction accuracy vs speed: ok in 7.6s]
+
+##############################################################################
+# Cost model, leave-one-kernel-out
+# bench/autotune_study.py --seconds 0.012 --shortlist 5 --json results/autotune.json
+##############################################################################
+[Cost model, leave-one-kernel-out: ok in 33.3s]
+
+==============================================================================
+SUMMARY
+==============================================================================
+  PASS  Instruction encoder vs Apple's assembler
+  PASS  Whole kernels + dependency audit
+  PASS  Numerics of every generated kernel
+  PASS  Vectorised exp, on hardware
+  PASS  Neural network vs a float64 reference
+  PASS  Machine ceilings and matmul roofline
+  PASS  Fused kernels vs numpy
+  PASS  Reduction accuracy vs speed
+  PASS  Cost model, leave-one-kernel-out
+
+9/9 passed in 215s

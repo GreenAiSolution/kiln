@@ -26,8 +26,8 @@ fn.run({"a": A, "b": B, "c": C, "out": OUT})
 That expression compiles to **one loop** that touches each element once and
 allocates nothing. numpy has to walk memory four times and allocate three
 temporaries, because a library sees four separate operators and a compiler
-sees one expression. On 16 M elements that is the difference between 20.6 ms
-and 4.5 ms.
+sees one expression. On 16 M elements that is the difference between 14.3 ms
+and 4.3 ms.
 
 ---
 
@@ -36,16 +36,22 @@ and 4.5 ms.
 All measured on an Apple M1 Max, single core, float32. Reproduce with
 `python3 run_all.py`.
 
+The speedup rows move a little between runs — across repeated runs the median
+lands at 2.7–2.9× and the best at 8.2–8.8×. The variance is on numpy's side:
+its temporaries are 64 MB each at the largest size, so its timings depend on
+how the page faults fall. The conservative end is quoted.
+
 | | |
 |---|---|
 | Instructions verified bit-identical to Apple's assembler | **491 / 491** |
 | Whole kernels re-assembled and compared | **159**, 16,518 instructions, 0 mismatches |
 | Kernels numerically verified | **1,386**, 9,075,402 elements |
 | Kernels required to be bit-exact that were bit-exact | **7 of 7 families, 0 ULP** |
-| Speedup vs idiomatic numpy | **3.22× median, 11.57× best** |
-| Speedup vs numpy with preallocated `out=` | **2.35× median, 5.94× best** |
+| Speedup vs idiomatic numpy | **2.69× median, 8.2× best** |
+| Speedup vs numpy with preallocated `out=` | **2.22× median, 4.8× best** |
 | Matrix multiply, % of this core's measured NEON ceiling | **97.6%** |
 | Vectorised `exp` accuracy | **1 ULP max**, 91.3% bit-identical to libm |
+| Vectorised `tanh` accuracy | **2 ULP max** (254 before it was fixed) |
 | Vectorised `exp` throughput | **2.57 billion/second**, one core |
 | Neural network trained on emitted code, vs float64 reference | **1.4 × 10⁻⁴** relative, 300 steps |
 | Non-standard-library imports under `kiln/` | **0** |
@@ -216,15 +222,34 @@ reference's fault**.
 
 **Measured, with a stated bound.** `exp`, `recip` and `rsqrt` are
 approximations by construction, so there is no correct bit pattern to demand.
-The tests report the worst error in ULP: exp 1, recip 1, rsqrt 2, sigmoid 3.
-`tanh` and `gelu` reach 32–63 ULP, and that is the formula's cancellation, not
-the compiler's — it is reported rather than tuned away.
+The tests report the worst error in ULP: exp 1, recip 1, rsqrt 2, tanh 2,
+sigmoid 3.
+
+`tanh` did not start at 2. The obvious formula, `(e^2x − 1)/(e^2x + 1)`,
+subtracts two nearly equal numbers near zero and measured **254 ULP** — and
+the test only caught it intermittently, because it seeded its random inputs
+from Python's `hash()`, which is randomised per process. A test whose inputs
+move is not a test. Both were fixed: the seeds are now derived with `crc32`,
+and `tanh` is a primitive lowered to a minimax polynomial for |x| < 0.55 and
+the exponential form beyond, blended with a compare-and-select because four
+lanes in one register can disagree about which branch they want.
+
+The accurate version evaluates both branches for every lane, so it costs
+**1.5×** the fast one. `ir.tanh_fast` keeps the old formula for anyone who
+wants that trade, with its 254 ULP stated rather than discovered later.
+
+`gelu` reports a different metric on purpose. Its ULP number is enormous
+(8.7 × 10⁸) and meaningless: the tanh form computes `1 + tanh(z)`, and where
+`tanh(z) → −1` that subtraction destroys every digit — but the output there is
+about 1e-7 against a function whose range is 8. Scored against the function's
+scale, the error is **8.2e-08**. The cancellation is in the formula
+transformers use, not in the compiler, and both numbers are printed.
 
 **Backward error, against the exact sum.** Reductions are scored against
 `math.fsum` with the bound any correct float32 summation must satisfy.
 Comparing them against some *other* arbitrary summation order would measure
-nothing: KILN's tree reduction is 5.6–135× more accurate than a sequential
-float32 loop.
+nothing: KILN's tree reduction is measured at 12–337× more accurate than a
+sequential float32 loop.
 
 ### The reduction trade-off, published rather than buried
 
@@ -254,14 +279,14 @@ would write with preallocated `out=` arrays.
 
 | kernel | 16 M elements | vs numpy | vs numpy+`out=` |
 |---|---|---|---|
-| `(a*b+c*d)*(a-d) + (b*c-a*a)` | 5.6 ms | **11.6×** | 5.9× |
-| `1/(1+exp(-x))` | 12.3 ms | 5.6× | 3.6× |
-| `sum((a-b)²)` | 4.3 ms | 4.6× | 2.3× |
-| `(a*b+c)*a - b` | 4.5 ms | 4.6× | 2.8× |
-| gelu | 19.3 ms | 3.6× | 2.4× |
-| softmax | 23.3 ms | 2.9× | 2.2× |
-| `a*2.5 + b` | 3.3 ms | 2.8× | 1.5× |
-| layernorm | 14.3 ms | 2.1× | 1.3× |
+| `(a*b+c*d)*(a-d) + (b*c-a*a)` | 5.5 ms | **8.2×** | 4.2× |
+| `1/(1+exp(-x))` | 11.2 ms | 5.0× | 3.4× |
+| `sum((a-b)²)` | 3.9 ms | 4.2× | 2.1× |
+| `(a*b+c)*a - b` | 4.3 ms | 3.3× | 2.4× |
+| softmax | 20.3 ms | 2.7× | 2.0× |
+| `a*2.5 + b` | 3.3 ms | 2.6× | 1.4× |
+| gelu | 27.2 ms | 2.2× | 1.3× |
+| layernorm | 13.0 ms | 1.7× | 1.2× |
 
 The pattern is the whole thesis: the more operators in the expression, the
 bigger the win, because that is exactly how many memory passes fusion

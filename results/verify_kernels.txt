@@ -1,0 +1,35 @@
+KILN kernel verification
+==========================================================================
+
+kernel        cases  worst ULP  rel to scale  reduce err  failed   standard
+----------------------------------------------------------------------------------------
+axpy             77          0      0.00e+00           -       0   EXACT
+chain            77          0      0.00e+00           -       0   EXACT
+exp              77          1      7.75e-08           -       0   ULP
+gelu             77  874843380      8.17e-08           -       0   rel. to scale
+hypot            77          0      0.00e+00           -       0   EXACT
+layernorm        77          2      1.35e-07     2.3 eps       0   ULP
+max              77          0      0.00e+00           -       0   EXACT
+multi_out        77          0      0.00e+00           -       0   EXACT
+poly5            77          0      0.00e+00           -       0   EXACT
+recip            77          1      9.56e-08           -       0   ULP
+relu             77          0      0.00e+00           -       0   EXACT
+rsqrt            77          2      1.16e-07           -       0   ULP
+sigmoid          77          3      1.79e-07           -       0   ULP
+softmax          77          3      1.76e-07     2.0 eps       0   ULP
+sum              77          0      0.00e+00     0.2 eps       0   ULP
+sumsq            77          0      0.00e+00     3.1 eps       0   ULP
+tanh             77          2      1.19e-07           -       0   ULP
+wide             77          0      0.00e+00           -       0   EXACT
+--------------------------------------------------------------------------
+1386 kernels compiled and checked, 9,075,402 elements compared element by element
+schedules: 7   sizes: 11
+
+reduction accuracy (vs exact sum)
+         n      kiln err    sequential err     ratio
+      1024     5.694e-09         6.716e-08     11.8x
+     16384     2.644e-08         3.559e-06    134.6x
+    262144     3.007e-08         4.504e-06    149.8x
+   1048576     1.952e-09         6.577e-07    337.0x
+
+All kernels within their stated standard.

@@ -34,6 +34,11 @@ X_BUFS, X_SARGS, X_OUT, X_TMP = 0, 1, 2, 3
 X_BASE0 = 4                   # buffer pointers live in x4 upward
 X_COUNT = 16
 MAX_BUFS = 12
+TANH_COEFFS = [1.0, -0.3333331048488617, 0.13332460820674896,
+               -0.053842708468437195, 0.021039675921201706,
+               -0.0062355599366128445]
+TANH_CROSS = 0.55
+
 KAHAN_THRESHOLD = 4096    # terms per accumulator lane before drift shows
 
 
@@ -106,6 +111,10 @@ def constants_of(exprs):
                 vals.append(v)
     if any(n.op == "step" for e in exprs for n in topo(e)):
         for v in (0.0, 1.0):
+            if v not in vals:
+                vals.append(v)
+    if any(n.op == "tanh" for e in exprs for n in topo(e)):
+        for v in vecexp.CONSTS + TANH_COEFFS + [TANH_CROSS, 1.0, 2.0]:
             if v not in vals:
                 vals.append(v)
     return vals, has_exp
@@ -216,6 +225,39 @@ def _emit_node(a, node, dsts, srcs, cregs, sregs, bases, off_bytes, scratch):
         for u in range(U):
             a(isa.FCMGT(dsts[u], A[u], cregs[0.0]))
             a(isa.AND_v(dsts[u], dsts[u], cregs[1.0]))
+    elif op == "tanh":
+        # Two formulas, blended by a compare-and-select rather than a branch:
+        #   |x| <  0.55   x * P(x^2), a minimax polynomial, no cancellation
+        #   |x| >= 0.55   (e^2x - 1)/(e^2x + 1), where e^2x is far from 1
+        # Both are computed for every lane and one is selected, because four
+        # lanes in one register can disagree about which branch they want and
+        # there is no way to send them different ways.
+        A = arg_regs(0)
+        s0, s1, s2, s3, s4 = scratch[:5]
+        for u in range(U):
+            d, x = dsts[u], A[u]
+            a(isa.FMUL(s0, x, x))                          # x^2
+            a(isa.MOV_v(d, cregs[TANH_COEFFS[-1]]))
+            for k in range(len(TANH_COEFFS) - 2, -1, -1):
+                a(isa.MOV_v(s1, cregs[TANH_COEFFS[k]]))
+                a(isa.FMLA(s1, d, s0))
+                a(isa.MOV_v(d, s1))
+            a(isa.FMUL(d, d, x))                           # x * P(x^2)
+
+            a(isa.FMUL(s1, x, cregs[2.0]))
+            vecexp.emit(a, s1, s1, cregs, s2, s3, s4)      # e^2x
+            a(isa.FSUB(s2, s1, cregs[1.0]))                # numerator
+            a(isa.FADD(s3, s1, cregs[1.0]))                # denominator
+            a(isa.FRECPE(s4, s3))
+            for _ in range(3):
+                a(isa.FRECPS(s1, s4, s3))
+                a(isa.FMUL(s4, s4, s1))
+            a(isa.FMUL(s1, s2, s4))                        # the exp branch
+
+            a(isa.FABS(s2, x))
+            a(isa.FCMGT(s2, cregs[TANH_CROSS], s2))        # 1s where |x| < 0.55
+            a(isa.BSL(s2, d, s1))
+            a(isa.MOV_v(d, s2))
     elif op == "exp":
         A = arg_regs(0)
         for u in range(U):
@@ -230,7 +272,8 @@ def _emit_body(a, order, lastuse, exprs, U, cregs, sregs, bases,
                comps=None):
     """One pass of the fused body over U*4 elements at byte offset off_bytes."""
     regs = {}                    # node id -> list of U registers
-    scratch = pool.take(vecexp.SCRATCH) if _needs_scratch(order) else [None] * 3
+    nscratch = _scratch_count(order)
+    scratch = pool.take(nscratch) if nscratch else [None] * 5
 
     for i, node in enumerate(order):
         dsts = pool.take(U)
@@ -276,12 +319,24 @@ def _emit_body(a, order, lastuse, exprs, U, cregs, sregs, bases,
 
     for rs in regs.values():
         pool.give(rs)
-    if scratch[0] is not None:
+    if nscratch:
         pool.give(scratch)
 
 
+TANH_SCRATCH = 5
+
+
+def _scratch_count(order):
+    """How many spare vector registers the expansions need."""
+    if any(n.op == "tanh" for n in order):
+        return TANH_SCRATCH
+    if any(n.op in ("exp", "recip", "rsqrt") for n in order):
+        return vecexp.SCRATCH
+    return 0
+
+
 def _needs_scratch(order):
-    return any(n.op in ("exp", "recip", "rsqrt") for n in order)
+    return _scratch_count(order) > 0
 
 
 def _peak_regs(order, lastuse, U, need_scratch):
@@ -292,7 +347,7 @@ def _peak_regs(order, lastuse, U, need_scratch):
         for arg in n.args:
             if arg.id in lastuse and lastuse[arg.id] == i:
                 live -= U
-    return peak + (vecexp.SCRATCH if need_scratch else 0)
+    return peak + _scratch_count(order)
 
 
 # ---------------------------------------------------------------- kernels
@@ -341,7 +396,7 @@ def build_stage(stage, buf_index, sched):
     if stage.kind == "reduce":
         pass                      # accumulators counted below
     avail = NREGS - reserved
-    if avail < peak1 + (vecexp.SCRATCH if need_scratch else 0) + 1:
+    if avail < peak1 + _scratch_count(order) + 1:
         raise CompileError(
             f"expression needs more registers than exist "
             f"({reserved} constants + {peak1} live)")
