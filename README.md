@@ -368,6 +368,33 @@ Requires macOS on Apple Silicon (the JIT path is `mmap`/`mprotect`/
 `sys_icache_invalidate`), `clang` and `otool` from the Command Line Tools for
 the differential tests, and numpy for the benchmark comparisons.
 
+## How this relates to work that already exists
+
+This is not a new idea, and pretending otherwise would be the fastest way to
+lose an informed reader.
+
+**Halide, TVM, Triton, XLA and tinygrad** all do this, at industrial scale,
+with far more capability: multiple backends, GPUs, autoscheduling searched
+over spaces vastly larger than 40 candidates, and years of production use.
+Anyone who needs a tensor compiler should use one of those, not this.
+
+What is different here is narrow and deliberate:
+
+- **Every one of them rests on LLVM** (or on a vendor assembler, or on
+  CUDA/Metal) for the last step — turning an instruction into bytes. KILN does
+  that step itself. That is the part this project exists to show.
+- **The verification is unusual.** Emitting machine code is easy to get subtly
+  wrong and hard to notice. Making every encoder carry its own assembly text,
+  so the whole instruction set can be differential-tested against the platform
+  assembler, is a cheap technique that more projects in this space could use.
+  It cost about 150 lines and caught a real bug immediately.
+- **It is small enough to read.** ~3,200 lines with no dependencies means the
+  path from `a*b + c` to a 32-bit instruction word is followable end to end,
+  which is not true of any of the above.
+
+If you want the same idea done properly and at scale, read tinygrad — it is
+the closest in spirit and about as legible as a real one gets.
+
 ## Known limits
 
 - Apple Silicon and ARM64 only. The instruction encoder is architecture
