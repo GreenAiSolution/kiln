@@ -120,9 +120,33 @@ def compile(prog, sched=None, contract=True):
 
 # ------------------------------------------------------------- measurement
 
+_spun = [False]
+
+
+def spin_up(seconds=0.35):
+    """Get the core to its full clock before timing anything.
+
+    Apple Silicon ramps frequency on demand, and the first thing measured in
+    a fresh process runs on a core that has not ramped yet. That made the
+    first benchmark in every run read low - it is how a peak-throughput
+    kernel came out at 3.32 fused multiply-adds per cycle when the real
+    number is 4.00. Measured once and cached, because it only has to happen
+    once per process.
+    """
+    if _spun[0]:
+        return
+    t_end = time.perf_counter() + seconds
+    x = 0.0
+    while time.perf_counter() < t_end:
+        for _ in range(2000):
+            x = x * 1.0000001 + 1.0
+    _spun[0] = bool(x) or True
+
+
 def bench(fn, seconds=0.25, min_reps=3, warmup=2):
     """Best-of timing. The minimum is the right statistic here: interference
     from other processes only ever makes a run slower, never faster."""
+    spin_up()
     for _ in range(warmup):
         fn()
     reps, best, total = 0, math.inf, 0.0

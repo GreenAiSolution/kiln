@@ -26,7 +26,7 @@ fn.run({"a": A, "b": B, "c": C, "out": OUT})
 That expression compiles to **one loop** that touches each element once and
 allocates nothing. numpy has to walk memory four times and allocate three
 temporaries, because a library sees four separate operators and a compiler
-sees one expression. On 16 M elements that is the difference between 14.3 ms
+sees one expression. On 16 M elements that is the difference between 12.5 ms
 and 4.3 ms.
 
 ---
@@ -36,10 +36,19 @@ and 4.3 ms.
 All measured on an Apple M1 Max, single core, float32. Reproduce with
 `python3 run_all.py`.
 
-The speedup rows move a little between runs — across repeated runs the median
-lands at 2.7–2.9× and the best at 8.2–8.8×. The variance is on numpy's side:
-its temporaries are 64 MB each at the largest size, so its timings depend on
-how the page faults fall. The conservative end is quoted.
+The speedup rows move a little between runs — the median lands at 2.7–2.9×.
+The variance is on numpy's side: its temporaries are 64 MB each at the largest
+size, so its timings depend on how the page faults fall.
+
+One measurement bug is worth naming, because it was mine. The first version of
+`bench/roofline.py` reported this core's peak at 85.6 GFLOP/s — 3.32 fused
+multiply-adds per cycle. The real number is **103.3 GFLOP/s, exactly 4.00 per
+cycle**. Two causes: the peak kernel was the first thing timed in a fresh
+process, on a core that had not yet ramped its clock; and a ceiling is a
+maximum over attempts, but only one kernel shape was tried. Every benchmark
+now spins the core up first, and the peak is the best of five shapes. The
+ratios barely moved — numerator and denominator were both understated — but
+the absolute numbers were wrong and are now right.
 
 | | |
 |---|---|
@@ -47,8 +56,8 @@ how the page faults fall. The conservative end is quoted.
 | Whole kernels re-assembled and compared | **159**, 16,518 instructions, 0 mismatches |
 | Kernels numerically verified | **1,386**, 9,075,402 elements |
 | Kernels required to be bit-exact that were bit-exact | **7 of 7 families, 0 ULP** |
-| Speedup vs idiomatic numpy | **2.69× median, 8.2× best** |
-| Speedup vs numpy with preallocated `out=` | **2.22× median, 4.8× best** |
+| Speedup vs idiomatic numpy | **2.9× median, 7.1× best** |
+| Speedup vs numpy with preallocated `out=` | **2.2× median, 5.0× best** |
 | Matrix multiply, % of this core's measured NEON ceiling | **97.6%** |
 | Vectorised `exp` accuracy | **1 ULP max**, 91.3% bit-identical to libm |
 | Vectorised `tanh` accuracy | **2 ULP max** (254 before it was fixed) |
@@ -124,22 +133,31 @@ register — which is why there is no packing pass: both operands are read in
 the layout they already have.
 
 `bench/roofline.py` first measures what this core can actually do, using a
-kernel of nothing but independent FMAs (**85.6 GFLOP/s**) and a kernel of
-nothing but streaming loads (**61.1 GB/s**). Against that measured ceiling:
+kernel of nothing but independent FMAs (**103.3 GFLOP/s**, exactly 4.00 per
+cycle) and a kernel of nothing but streaming loads (**61.6 GB/s**). Against
+that measured ceiling:
 
-| shape | GFLOP/s | % of ceiling |
-|---|---|---|
-| 128³ | 83.6 | **97.6%** |
-| 512³ | 81.4 | 95.0% |
-| 2048³ | 68.5 | 80.0% |
+| shape | plain | blocked | % of ceiling |
+|---|---|---|---|
+| 128³ | 100.7 | 100.6 | **97.6%** |
+| 512³ | 97.8 | 97.0 | 94.7% |
+| 1024³ | 85.8 | 93.2 | 90.2% |
+| 2048³ | 18.8 | **81.7** | 79.1% |
 
-2048³ originally collapsed to 18.0 GFLOP/s — 21% — because a column strip of
-B was re-streamed from DRAM for every row panel of A. Cache blocking
-(`BlockedGemm`) took it to 68.5. That 3.8× is the single largest measured
-improvement in the project.
+Getting the ceiling right took two tries. Measuring FMA throughput with only
+8 independent accumulator chains reports 2.00 per cycle, and 12 reports 3.00 —
+those are measurements of FMA *latency*, not throughput. Only at 16 chains
+does the real 4.00 appear.
+
+2048³ collapses to 18.8 GFLOP/s without cache blocking — 18% of the ceiling —
+because a column strip of B is re-streamed from DRAM for every row panel of A.
+Holding a cache-sized block of B resident instead gives **81.7**. That 4.3× is
+the single largest measured improvement in the project, and the inner loop's
+instructions are byte-for-byte identical before and after. Only the order
+changed.
 
 **What this does not beat.** Apple's Accelerate reaches ~2,100 GFLOP/s here,
-roughly 25× more. Not by writing better NEON — by dispatching to AMX, an
+roughly 20× more. Not by writing better NEON — by dispatching to AMX, an
 on-die matrix coprocessor whose instruction encoding Apple does not publish.
 No sequence of documented ARM instructions reaches it. That is the real
 ceiling on "from scratch" on this chip, and it is worth naming rather than
@@ -279,14 +297,14 @@ would write with preallocated `out=` arrays.
 
 | kernel | 16 M elements | vs numpy | vs numpy+`out=` |
 |---|---|---|---|
-| `(a*b+c*d)*(a-d) + (b*c-a*a)` | 5.5 ms | **8.2×** | 4.2× |
-| `1/(1+exp(-x))` | 11.2 ms | 5.0× | 3.4× |
-| `sum((a-b)²)` | 3.9 ms | 4.2× | 2.1× |
-| `(a*b+c)*a - b` | 4.3 ms | 3.3× | 2.4× |
-| softmax | 20.3 ms | 2.7× | 2.0× |
-| `a*2.5 + b` | 3.3 ms | 2.6× | 1.4× |
-| gelu | 27.2 ms | 2.2× | 1.3× |
-| layernorm | 13.0 ms | 1.7× | 1.2× |
+| `(a*b+c*d)*(a-d) + (b*c-a*a)` | 5.3 ms | **7.1×** | 3.9× |
+| `1/(1+exp(-x))` | 9.3 ms | 5.1× | 3.4× |
+| `sum((a-b)²)` | 3.2 ms | 4.5× | 2.1× |
+| `(a*b+c)*a - b` | 4.3 ms | 2.9× | 2.2× |
+| softmax | 17.0 ms | 2.7× | 2.0× |
+| gelu | 22.5 ms | 2.4× | 1.4× |
+| `a*2.5 + b` | 3.2 ms | 2.4× | 1.2× |
+| layernorm | 10.8 ms | 1.8× | 1.2× |
 
 The pattern is the whole thesis: the more operators in the expression, the
 bigger the win, because that is exactly how many memory passes fusion
@@ -322,6 +340,7 @@ kiln/
   tune.py         the schedule search and its learned cost model
   runtime.py      buffers, the pointer table, timing
 
+tour.py           a guided walkthrough that runs the compiler in front of you
 tests/            verify_isa, verify_listing, verify_kernels, verify_exp,
                   verify_training
 bench/            vs_numpy, roofline, reduction_tradeoff, autotune_study
@@ -339,7 +358,9 @@ imported.
 ## Running it
 
 ```
-python3 run_all.py            # everything, about 6 minutes
+python3 tour.py               # a guided walkthrough, 8 stops, ~40 seconds
+python3 tour.py 5             # just one stop
+python3 run_all.py            # everything, about 4 minutes
 python3 run_all.py --quick    # verification only, about 2 minutes
 ```
 
