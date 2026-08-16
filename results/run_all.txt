@@ -1,0 +1,199 @@
+instructions checked : 491
+distinct forms       : 84
+MISMATCHES           : 0
+
+Every instruction KILN emits is bit-identical to what Apple's
+own assembler produces for the same mnemonic.
+Whole-kernel verification
+==========================================================================
+whole kernels re-assembled : 159
+instructions compared      : 16,561
+mismatches                 : 0
+
+modules under kiln/        : 13
+non-stdlib imports         : 0
+kiln/ imports nothing outside the Python standard library.
+
+PASS
+KILN kernel verification
+==========================================================================
+
+kernel        cases  worst ULP  reduce err  failed   standard
+------------------------------------------------------------------------------
+axpy             77          0           -       0   EXACT
+chain            77          0           -       0   EXACT
+exp              77          1           -       0   measured
+gelu             77         32           -       0   measured
+hypot            77          0           -       0   EXACT
+layernorm        77          2     3.0 eps       0   measured
+max              77          0           -       0   EXACT
+multi_out        77          0           -       0   EXACT
+poly5            77          0           -       0   EXACT
+recip            77          1           -       0   measured
+relu             77          0           -       0   EXACT
+rsqrt            77          2           -       0   measured
+sigmoid          77          3           -       0   measured
+softmax          77          2     1.5 eps       0   measured
+sum              77          0     0.3 eps       0   measured
+sumsq            77          0     1.5 eps       0   measured
+tanh             77        254           -       7   measured  <-- FAIL
+wide             77          0           -       0   EXACT
+--------------------------------------------------------------------------
+1386 kernels compiled and checked, 9,075,402 elements compared element by element
+schedules: 7   sizes: 11
+
+reduction accuracy (vs exact sum)
+         n      kiln err    sequential err     ratio
+      1024     5.694e-09         6.716e-08     11.8x
+     16384     2.644e-08         3.559e-06    134.6x
+    262144     3.007e-08         4.504e-06    149.8x
+   1048576     1.952e-09         6.577e-07    337.0x
+
+FAILURES: 7
+   ('tanh', 65536, (1, 0, 'auto'), '254 ULP > 64')
+   ('tanh', 65536, (2, 0, 'auto'), '254 ULP > 64')
+   ('tanh', 65536, (3, 0, 'auto'), '254 ULP > 64')
+   ('tanh', 65536, (4, 0, 'auto'), '254 ULP > 64')
+   ('tanh', 65536, (6, 0, 'auto'), '254 ULP > 64')
+   ('tanh', 65536, (8, 0, 'auto'), '254 ULP > 64')
+   ('tanh', 65536, (4, 256, 'auto'), '254 ULP > 64')
+KILN vectorised exp - measured on hardware
+==============================================================================
+polynomial degree : 6 (minimax, from tools/fit_exp.py)
+instructions      : 21 per four lanes, 3 scratch registers
+constants         : 12 vector registers
+
+  full domain                  200003 pts   max 1 ULP   bit-exact  91.3%   [0:91.3% 1:8.7%]
+  neural net range             200003 pts   max 1 ULP   bit-exact  91.4%   [0:91.4% 1:8.6%]
+  softmax range                200003 pts   max 1 ULP   bit-exact  91.1%   [0:91.1% 1:8.9%]
+  near zero                    100003 pts   max 1 ULP   bit-exact 100.0%   [0:100.0% 1:0.0%]
+  near overflow                100003 pts   max 1 ULP   bit-exact  91.2%   [0:91.2% 1:8.8%]
+  near underflow               100003 pts   max 1 ULP   bit-exact  91.2%   [0:91.2% 1:8.8%]
+
+throughput        : 1.92 billion exp/s (0.52 ns each, one core)
+
+worst over all sweeps: 1 ULP  -> PASS (bound 2)
+KILN neural network - trained entirely on emitted machine code
+==========================================================================
+architecture     : 64 -> 128 -> 128 -> 32   batch 128
+parameters       : 28,960
+steps            : 300   lr 0.05   momentum 0.9
+
+    step     kiln loss   float64 loss    rel gap
+       0    1.80536985     1.80536996   6.03e-08
+       1    1.36869550     1.36869538   8.92e-08
+       2    0.95495981     0.95495975   6.33e-08
+       5    0.77513528     0.77513534   7.36e-08
+      10    0.34491426     0.34491425   1.31e-08
+      25    0.17224836     0.17224837   6.58e-08
+      50    0.11729146     0.11729146   1.51e-08
+     100    0.07926817     0.07926817   6.12e-08
+     200    0.04586734     0.04586521   4.65e-05
+     299    0.02984627     0.02984953   1.09e-04
+
+loss at step 0   : 1.805370
+loss at step 299 : 0.029846   (60.5x lower)
+float64 reference: 0.029850
+max relative gap : 1.397e-04 over all 300 steps
+gap at final step: 1.091e-04
+steps that improved: 298/299
+
+training time    : 154 ms for 300 steps (0.51 ms/step)
+arithmetic       : 22.0 MFLOP per step, 42.9 GFLOP/s sustained
+
+PASS - the float32 network tracks the float64 reference and the loss came down.
+Machine ceilings, measured by KILN's own emitted code
+==========================================================================
+vector FMA peak      :     70.6 GFLOP/s  (2.74 FMA/cycle at 3.228 GHz)
+streaming load peak  :     51.7 GB/s      (single core, 67 MB per pass)
+
+KILN matmul against the compute ceiling
+             shape   GFLOP/s  % of peak  flops/insn    code
+  64x64x64            58.6      83.0%        6.10    548B
+  128x128x128           61.8      87.4%        6.10    548B
+  256x256x256           60.0      84.9%        6.10    548B
+  512x512x512           53.3      75.4%        6.10    548B
+  1024x1024x1024          48.3      68.4%        6.10    548B
+  2048x2048x2048          14.1      20.0%        6.10    548B
+
+What the ceiling means
+  This core can retire about 2.7 4-wide FMAs per cycle.
+  KILN's matmul reaches 87% of that with no packing pass and no assembler.
+
+  Apple's Accelerate beats this by roughly an order of magnitude,
+  and not by writing better NEON: it dispatches to AMX, an on-die
+  matrix coprocessor whose instruction encoding Apple does not
+  publish. There is no sequence of documented ARM instructions that
+  reaches it. That is the real ceiling on 'from scratch' here, and
+  it is worth naming rather than hiding.
+KILN vs numpy   (Apple M1 Max, float32, single core)
+============================================================================================
+
+n = 4,096   L1 (16 KB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy             0.70      1.93       1.70     2.77x      2.44x    70.4  3.42e-08   6.85e-08
+  chain            1.02      3.18       3.14     3.10x      3.06x    64.0  9.13e-08   1.14e-07
+  wide             1.50      8.26       7.06     5.50x      4.70x    54.5  5.63e-08   5.47e-08
+  sigmoid          3.68     14.56      13.90     3.96x      3.78x     8.9  1.04e-07   8.87e-08
+  gelu             6.28     15.10      14.17     2.41x      2.26x     5.2  9.03e-08   9.77e-08
+  sumsq            1.07      4.56       4.34     4.25x      4.04x    30.5  1.61e-08   1.61e-08
+  softmax          7.28     16.94      16.52     2.33x      2.27x     6.7  1.65e-07   8.13e-08
+  layernorm        4.90     14.58      13.00     2.98x      2.66x    10.0  1.15e-07   1.60e-07
+
+n = 65,536   L2 (256 KB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy            14.62     19.92      19.71     1.36x      1.35x    53.8  3.42e-08   6.84e-08
+  chain           19.74     48.71      46.56     2.47x      2.36x    53.1  9.37e-08   1.16e-07
+  wide            25.15    103.71     103.67     4.12x      4.12x    52.1  6.69e-08   7.97e-08
+  sigmoid         58.98    204.08     201.58     3.46x      3.42x     8.9  1.12e-07   9.17e-08
+  gelu            93.37    188.71     206.17     2.02x      2.21x     5.6  1.01e-07   1.15e-07
+  sumsq           12.52     45.58      47.02     3.64x      3.76x    41.9  4.16e-07   2.71e-08
+  softmax        113.37    244.50     216.17     2.16x      1.91x     6.9  2.22e-07   9.53e-08
+  layernorm       47.52     77.71      87.62     1.64x      1.84x    16.5  1.42e-07   3.57e-08
+
+n = 1,048,576   L2/SLC (4 MB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy           246.83    553.17     333.54     2.24x      1.35x    51.0  3.41e-08   6.82e-08
+  chain          344.42   1064.13     880.42     3.09x      2.56x    48.7  9.45e-08   1.17e-07
+  wide           433.50   2901.08    1944.96     6.69x      4.49x    48.4  7.17e-08   9.25e-08
+  sigmoid        950.92   4656.54    3196.79     4.90x      3.36x     8.8  1.18e-07   9.43e-08
+  gelu          1485.17   4912.79    2936.46     3.31x      1.98x     5.6  1.12e-07   1.23e-07
+  sumsq          329.87   1120.25     639.75     3.40x      1.94x    25.4  3.01e-08   3.01e-08
+  softmax       1706.92   4173.83    3418.08     2.45x      2.00x     7.4  1.16e-07   8.65e-08
+  layernorm     1096.12   1511.50    1177.17     1.38x      1.07x    11.5  7.51e-08   1.07e-07
+
+n = 16,777,216   DRAM (64 MB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy          3701.58  13524.50    5691.67     3.65x      1.54x    54.4  3.41e-08   6.81e-08
+  chain         5118.50  22313.62   16927.50     4.36x      3.31x    52.4  9.46e-08   1.18e-07
+  wide          6844.00  75755.42   39163.12    11.07x      5.72x    49.0  7.94e-08   9.98e-08
+  sigmoid      17190.21  80283.71   55309.79     4.67x      3.22x     7.8  1.18e-07   9.48e-08
+  gelu         23880.37  89618.54   58300.38     3.75x      2.44x     5.6  1.17e-07   1.32e-07
+  sumsq         5250.67  24666.79   12309.62     4.70x      2.34x    25.6  6.40e-08   2.54e-08
+  softmax      27422.67  76601.46   60677.54     2.79x      2.21x     7.3  1.45e-07   1.44e-07
+  layernorm    18918.58  33990.08   21571.71     1.80x      1.14x    10.6  8.31e-08   6.05e-08
+
+============================================================================================
+speedup vs idiomatic numpy : median 3.31x   best 11.07x   worst 1.36x
+speedup vs numpy with out= : median 2.44x   best 5.72x   worst 1.07x
+worst error vs float64     : kiln 4.164e-07   numpy 1.604e-07
+cases where kiln is at least as accurate as numpy: 19/32
+compile time               : 0.73 ms average
+wrote results/vs_numpy.json
+Reduction: what compensation buys and what it costs
+============================================================================================
+KAHAN_THRESHOLD = 4096 terms per accumulator lane
+
+           n  terms/lane |   plain err   plain us |   kahan err   kahan us |   numpy err  numpy us |   auto
+--------------------------------------------------------------------------------------------
+       16384         683 |    5.11e-08        3.4 |    3.64e-08        6.2 |    3.64e-08      12.2 |  plain
+       65536        2731 |    1.71e-07       12.4 |    9.60e-08       24.3 |    6.99e-09      45.0 |  plain
+      262144       10923 |    1.65e-07       46.7 |    1.38e-08       93.4 |    1.38e-08     163.6 |  kahan
+     1048576       43691 |    4.33e-06      189.6 |    4.43e-08      370.4 |    4.50e-08     919.5 |  kahan
+     4194304      174763 |    3.38e-05      650.6 |    2.33e-08     1309.2 |    2.33e-08    2780.4 |  kahan
+    16777216      699051 |    2.77e-04     3968.1 |    6.03e-08     8110.6 |    6.03e-08   20907.2 |  kahan
+
+Reading this: at small sizes plain summation is already accurate and
+compensation is pure cost. At large sizes plain drifts by orders of
+magnitude and compensation is the only thing keeping the answer
+meaningful. The threshold is where those two curves cross.

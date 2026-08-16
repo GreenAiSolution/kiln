@@ -1,0 +1,54 @@
+KILN vs numpy   (Apple M1 Max, float32, single core)
+============================================================================================
+
+n = 4,096   L1 (16 KB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy             0.64      1.60       1.41     2.51x      2.23x    77.4  3.42e-08   6.85e-08
+  chain            0.85      2.96       3.16     3.50x      3.73x    77.5  9.13e-08   1.14e-07
+  wide             1.36      7.51       6.42     5.54x      4.73x    60.4  5.63e-08   5.47e-08
+  sigmoid          3.31     11.79      11.24     3.56x      3.39x     9.9  1.04e-07   8.87e-08
+  gelu             4.64     12.27      11.49     2.65x      2.48x     7.1  9.03e-08   9.77e-08
+  sumsq            1.07      4.49       3.97     4.19x      3.71x    30.6  1.61e-08   1.61e-08
+  softmax          6.55     13.75      13.37     2.10x      2.04x     7.5  1.65e-07   8.13e-08
+  layernorm        3.67     11.79      10.72     3.22x      2.92x    13.4  1.15e-07   1.60e-07
+
+n = 65,536   L2 (256 KB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy            11.83     17.79      17.58     1.50x      1.49x    66.5  3.42e-08   6.84e-08
+  chain           17.65     43.71      41.87     2.48x      2.37x    59.4  9.37e-08   1.16e-07
+  wide            22.60     92.96      92.92     4.11x      4.11x    58.0  6.69e-08   7.97e-08
+  sigmoid         52.90    180.83     179.17     3.42x      3.39x     9.9  1.12e-07   9.17e-08
+  gelu            83.65    168.46     147.50     2.01x      1.76x     6.3  1.01e-07   1.15e-07
+  sumsq            9.92     32.71      37.35     3.30x      3.77x    52.9  4.16e-07   2.71e-08
+  softmax         89.96    193.79     193.75     2.15x      2.15x     8.7  2.22e-07   9.53e-08
+  layernorm       38.54     66.67      69.54     1.73x      1.80x    20.4  1.42e-07   3.57e-08
+
+n = 1,048,576   L2/SLC (4 MB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy           228.79    519.17     280.25     2.27x      1.22x    55.0  3.41e-08   6.82e-08
+  chain          291.79    932.50     681.00     3.20x      2.33x    57.5  9.45e-08   1.17e-07
+  wide           347.00   2845.88    1663.50     8.20x      4.79x    60.4  7.17e-08   9.25e-08
+  sigmoid        853.25   3139.88    2580.67     3.68x      3.02x     9.8  1.18e-07   9.43e-08
+  gelu          1099.13   3218.50    2376.96     2.93x      2.16x     7.6  1.12e-07   1.23e-07
+  sumsq          264.88   1058.71     554.38     4.00x      2.09x    31.7  3.01e-08   3.01e-08
+  softmax       1374.54   3059.88    2755.92     2.23x      2.00x     9.2  1.16e-07   8.65e-08
+  layernorm      885.67    937.71    1029.75     1.06x      1.16x    14.2  7.51e-08   1.07e-07
+
+n = 16,777,216   DRAM (64 MB/array)
+  kernel        kiln us  numpy us  np+out us  vs numpy  vs np+out    GB/s  kiln err  numpy err
+  axpy          3325.63   9406.75    5116.92     2.83x      1.54x    60.5  3.41e-08   6.81e-08
+  chain         4455.79  20559.08   12659.58     4.61x      2.84x    60.2  9.46e-08   1.18e-07
+  wide          5561.08  64325.33   33022.08    11.57x      5.94x    60.3  7.94e-08   9.98e-08
+  sigmoid      12259.67  68942.13   43954.21     5.62x      3.59x    10.9  1.18e-07   9.48e-08
+  gelu         19299.13  69096.83   45427.92     3.58x      2.35x     7.0  1.17e-07   1.32e-07
+  sumsq         4286.17  19593.21    9693.46     4.57x      2.26x    31.3  6.40e-08   2.54e-08
+  softmax      23337.46  66749.08   50510.88     2.86x      2.16x     8.6  1.45e-07   1.44e-07
+  layernorm    14252.79  29863.04   18735.21     2.10x      1.31x    14.1  8.31e-08   6.05e-08
+
+============================================================================================
+speedup vs idiomatic numpy : median 3.22x   best 11.57x   worst 1.06x
+speedup vs numpy with out= : median 2.35x   best 5.94x   worst 1.16x
+worst error vs float64     : kiln 4.164e-07   numpy 1.604e-07
+cases where kiln is at least as accurate as numpy: 19/32
+compile time               : 0.62 ms average
+wrote results/vs_numpy.json
