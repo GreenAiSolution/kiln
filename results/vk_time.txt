@@ -1,1 +1,0 @@
-python3 tests/verify_kernels.py > results/verify_kernels.txt 2>&1  130.37s user 0.64s system 99% cpu 2:11.76 total
